@@ -47,7 +47,7 @@ fz_clear_bitmap(fz_bitmap *bit)
  */
 
 fz_error
-fz_write_pbm(fz_bitmap *bitmap, char *filename)
+fz_write_pbm(fz_context *ctx, fz_bitmap *bitmap, char *filename)
 {
 	FILE *fp;
 	unsigned char *p;
@@ -55,7 +55,7 @@ fz_write_pbm(fz_bitmap *bitmap, char *filename)
 
 	fp = fopen(filename, "wb");
 	if (!fp)
-		return fz_error_make("cannot open file '%s': %s", filename, strerror(errno));
+		return fz_error_make(ctx, "cannot open file '%s': %s", filename, strerror(errno));
 
 	assert(bitmap->n == 1);
 

@@ -23,7 +23,7 @@ fz_read(fz_stream *stm, unsigned char *buf, int len)
 		if (n < 0)
 		{
 			stm->error = 1;
-			return fz_error_note(n, "read error");
+			return fz_error_note(stm->ctx, n, "read error");
 		}
 		else if (n == 0)
 		{
@@ -50,7 +50,7 @@ fz_read(fz_stream *stm, unsigned char *buf, int len)
 		if (n < 0)
 		{
 			stm->error = 1;
-			return fz_error_note(n, "read error");
+			return fz_error_note(stm->ctx, n, "read error");
 		}
 		else if (n == 0)
 		{
@@ -80,7 +80,7 @@ fz_fill_buffer(fz_stream *stm)
 	if (n < 0)
 	{
 		stm->error = 1;
-		fz_error_handle(n, "read error; treating as end of file");
+		fz_error_handle(stm->ctx, n, "read error; treating as end of file");
 	}
 	else if (n == 0)
 	{
@@ -114,14 +114,14 @@ fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial)
 		if (buf->len / 200 > initial)
 		{
 			fz_drop_buffer(ctx, buf);
-			return fz_error_make("compression bomb detected");
+			return fz_error_make(ctx, "compression bomb detected");
 		}
 
 		n = fz_read(stm, buf->data + buf->len, buf->cap - buf->len);
 		if (n < 0)
 		{
 			fz_drop_buffer(ctx, buf);
-			return fz_error_note(n, "read error");
+			return fz_error_note(ctx, n, "read error");
 		}
 		if (n == 0)
 			break;
@@ -192,11 +192,11 @@ fz_seek(fz_stream *stm, int offset, int whence)
 		if (whence == 0)
 			offset -= fz_tell(stm);
 		if (offset < 0)
-			fz_warn("cannot seek backwards");
+			fz_warn(stm->ctx, "cannot seek backwards");
 		/* dog slow, but rare enough */
 		while (offset-- > 0)
 			fz_read_byte(stm);
 	}
 	else
-		fz_warn("cannot seek");
+		fz_warn(stm->ctx, "cannot seek");
 }

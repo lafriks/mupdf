@@ -28,7 +28,7 @@ static fz_context *ctx = NULL;
 
 void die(fz_error error)
 {
-	fz_error_handle(error, "aborting");
+	fz_error_handle(ctx, error, "aborting");
 	if (xref)
 		pdf_free_xref(xref);
 	exit(1);
@@ -293,7 +293,7 @@ static void retainpages(int argc, char **argv)
 	/* Load the old page tree */
 	error = pdf_load_page_tree(xref);
 	if (error)
-		die(fz_error_note(error, "cannot load page tree"));
+		die(fz_error_note(ctx, error, "cannot load page tree"));
 
 	/* Keep only pages/type entry to avoid references to unretained pages */
 	oldroot = fz_dict_gets(ctx, xref->trailer, "Root");
@@ -722,15 +722,15 @@ int main(int argc, char **argv)
 
 	ctx = fz_context_init(&fz_alloc_default);
 	if (ctx == NULL)
-		die(fz_error_note(1, "failed to initialise context"));
+		die(fz_error_note(ctx, 1, "failed to initialise context"));
 
 	error = pdf_open_xref(ctx, &xref, infile, password);
 	if (error)
-		die(fz_error_note(error, "cannot open input file '%s'", infile));
+		die(fz_error_note(ctx, error, "cannot open input file '%s'", infile));
 
 	out = fopen(outfile, "wb");
 	if (!out)
-		die(fz_error_make("cannot open output file '%s'", outfile));
+		die(fz_error_make(ctx, "cannot open output file '%s'", outfile));
 
 	fprintf(out, "%%PDF-%d.%d\n", xref->version / 10, xref->version % 10);
 	fprintf(out, "%%\316\274\341\277\246\n\n");
@@ -774,7 +774,7 @@ int main(int argc, char **argv)
 	writepdf();
 
 	if (fclose(out))
-		die(fz_error_make("cannot close output file '%s'", outfile));
+		die(fz_error_make(ctx, "cannot close output file '%s'", outfile));
 
 	fz_free(xref->ctx, uselist);
 	fz_free(xref->ctx, ofslist);
@@ -783,7 +783,7 @@ int main(int argc, char **argv)
 
 	pdf_free_xref(xref);
 
-	fz_flush_warnings();
+	fz_flush_warnings(ctx);
 	fz_context_fin(ctx);
 
 	return 0;

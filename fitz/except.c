@@ -63,7 +63,7 @@ fz_error fz_except_init(fz_context *ctx)
 		return fz_okay;
 	ex = fz_malloc_nothrow(ctx, sizeof(fz_except_context));
 	if (ex == NULL)
-		return fz_error_make("Failed to initialise exception context");
+		return fz_error_make(ctx, "Failed to initialise exception context");
 	ex->depth = -1;
 	ctx->except = ex;
 

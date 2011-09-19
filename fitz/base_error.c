@@ -1,159 +1,151 @@
 #include "fitz.h"
 
-enum { LINE_LEN = 160, LINE_COUNT = 25 };
-
-static char warn_message[LINE_LEN] = "";
-static int warn_count = 0;
-
-void fz_flush_warnings(void)
+void fz_flush_warnings(fz_context *ctx)
 {
-	if (warn_count > 1)
-		fprintf(stderr, "warning: ... repeated %d times ...\n", warn_count);
-	warn_message[0] = 0;
-	warn_count = 0;
+	if (ctx->warn_count > 1)
+		fprintf(stderr, "warning: ... repeated %d times ...\n", ctx->warn_count);
+	ctx->warn_message[0] = 0;
+	ctx->warn_count = 0;
 }
 
-void fz_warn(char *fmt, ...)
+void fz_warn(fz_context *ctx, char *fmt, ...)
 {
 	va_list ap;
-	char buf[LINE_LEN];
+	char buf[FZ_ERR_LINE_LEN];
 
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 
-	if (!strcmp(buf, warn_message))
+	if (!strcmp(buf, ctx->warn_message))
 	{
-		warn_count++;
+		ctx->warn_count++;
 	}
 	else
 	{
-		fz_flush_warnings();
+		fz_flush_warnings(ctx);
 		fprintf(stderr, "warning: %s\n", buf);
-		fz_strlcpy(warn_message, buf, sizeof warn_message);
-		warn_count = 1;
+		fz_strlcpy(ctx->warn_message, buf, sizeof ctx->warn_message);
+		ctx->warn_count = 1;
 	}
 }
 
-static char error_message[LINE_COUNT][LINE_LEN];
-static int error_count = 0;
-
 static void
-fz_emit_error(char what, char *location, char *message)
+fz_emit_error(fz_context *ctx, char what, char *location, char *message)
 {
-	fz_flush_warnings();
+	fz_flush_warnings(ctx);
 
 	fprintf(stderr, "%c %s%s\n", what, location, message);
 
-	if (error_count < LINE_COUNT)
+	if (ctx->error_count < FZ_ERR_LINE_COUNT)
 	{
-		fz_strlcpy(error_message[error_count], location, LINE_LEN);
-		fz_strlcat(error_message[error_count], message, LINE_LEN);
-		error_count++;
+		fz_strlcpy(ctx->error_message[ctx->error_count], location, FZ_ERR_LINE_LEN);
+		fz_strlcat(ctx->error_message[ctx->error_count], message, FZ_ERR_LINE_LEN);
+		ctx->error_count++;
 	}
 }
 
 int
-fz_get_error_count(void)
+fz_get_error_count(fz_context *ctx)
 {
-	return error_count;
+	return ctx->error_count;
 }
 
 char *
-fz_get_error_line(int n)
+fz_get_error_line(fz_context *ctx, int n)
 {
-	return error_message[n];
+	return ctx->error_message[n];
 }
 
 fz_error
-fz_error_make_imp(const char *file, int line, const char *func, char *fmt, ...)
+fz_error_make_imp(fz_context *ctx, const char *file, int line, const char *func, char *fmt, ...)
 {
 	va_list ap;
-	char one[LINE_LEN], two[LINE_LEN];
+	char one[FZ_ERR_LINE_LEN], two[FZ_ERR_LINE_LEN];
 
-	error_count = 0;
+	ctx->error_count = 0;
 
 	snprintf(one, sizeof one, "%s:%d: %s(): ", file, line, func);
 	va_start(ap, fmt);
 	vsnprintf(two, sizeof two, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('+', one, two);
+	fz_emit_error(ctx, '+', one, two);
 
 	return -1;
 }
 
 fz_error
-fz_error_note_imp(const char *file, int line, const char *func, fz_error cause, char *fmt, ...)
+fz_error_note_imp(fz_context *ctx, const char *file, int line, const char *func, fz_error cause, char *fmt, ...)
 {
 	va_list ap;
-	char one[LINE_LEN], two[LINE_LEN];
+	char one[FZ_ERR_LINE_LEN], two[FZ_ERR_LINE_LEN];
 
 	snprintf(one, sizeof one, "%s:%d: %s(): ", file, line, func);
 	va_start(ap, fmt);
 	vsnprintf(two, sizeof two, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('|', one, two);
+	fz_emit_error(ctx, '|', one, two);
 
 	return cause;
 }
 
 void
-fz_error_handle_imp(const char *file, int line, const char *func, fz_error cause, char *fmt, ...)
+fz_error_handle_imp(fz_context *ctx, const char *file, int line, const char *func, fz_error cause, char *fmt, ...)
 {
 	va_list ap;
-	char one[LINE_LEN], two[LINE_LEN];
+	char one[FZ_ERR_LINE_LEN], two[FZ_ERR_LINE_LEN];
 
 	snprintf(one, sizeof one, "%s:%d: %s(): ", file, line, func);
 	va_start(ap, fmt);
 	vsnprintf(two, sizeof two, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('\\', one, two);
+	fz_emit_error(ctx, '\\', one, two);
 }
 
 fz_error
-fz_error_make_impx(char *fmt, ...)
+fz_error_make_impx(fz_context *ctx, char *fmt, ...)
 {
 	va_list ap;
-	char buf[LINE_LEN];
+	char buf[FZ_ERR_LINE_LEN];
 
-	error_count = 0;
+	ctx->error_count = 0;
 
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('+', "", buf);
+	fz_emit_error(ctx, '+', "", buf);
 
 	return -1;
 }
 
 fz_error
-fz_error_note_impx(fz_error cause, char *fmt, ...)
+fz_error_note_impx(fz_context *ctx, fz_error cause, char *fmt, ...)
 {
 	va_list ap;
-	char buf[LINE_LEN];
+	char buf[FZ_ERR_LINE_LEN];
 
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('|', "", buf);
+	fz_emit_error(ctx, '|', "", buf);
 
 	return cause;
 }
 
 void
-fz_error_handle_impx(fz_error cause, char *fmt, ...)
+fz_error_handle_impx(fz_context *ctx, fz_error cause, char *fmt, ...)
 {
 	va_list ap;
-	char buf[LINE_LEN];
+	char buf[FZ_ERR_LINE_LEN];
 
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof buf, fmt, ap);
 	va_end(ap);
 
-	fz_emit_error('\\', "", buf);
+	fz_emit_error(ctx, '\\', "", buf);
 }

@@ -322,7 +322,7 @@ pdf_make_tensor_patch(pdf_tensor_patch *p, int type, fz_point *pt)
 /* Sample various functions into lookup tables */
 
 static void
-pdf_sample_composite_shade_function(fz_shade *shade, pdf_function *func, float t0, float t1)
+pdf_sample_composite_shade_function(fz_context *ctx, fz_shade *shade, pdf_function *func, float t0, float t1)
 {
 	int i;
 	float t;
@@ -330,13 +330,13 @@ pdf_sample_composite_shade_function(fz_shade *shade, pdf_function *func, float t
 	for (i = 0; i < 256; i++)
 	{
 		t = t0 + (i / 255.0f) * (t1 - t0);
-		pdf_eval_function(func, &t, 1, shade->function[i], shade->colorspace->n);
+		pdf_eval_function(ctx, func, &t, 1, shade->function[i], shade->colorspace->n);
 		shade->function[i][shade->colorspace->n] = 1;
 	}
 }
 
 static void
-pdf_sample_component_shade_function(fz_shade *shade, int funcs, pdf_function **func, float t0, float t1)
+pdf_sample_component_shade_function(fz_context *ctx, fz_shade *shade, int funcs, pdf_function **func, float t0, float t1)
 {
 	int i, k;
 	float t;
@@ -345,19 +345,19 @@ pdf_sample_component_shade_function(fz_shade *shade, int funcs, pdf_function **f
 	{
 		t = t0 + (i / 255.0f) * (t1 - t0);
 		for (k = 0; k < funcs; k++)
-			pdf_eval_function(func[k], &t, 1, &shade->function[i][k], 1);
+			pdf_eval_function(ctx, func[k], &t, 1, &shade->function[i][k], 1);
 		shade->function[i][k] = 1;
 	}
 }
 
 static void
-pdf_sample_shade_function(fz_shade *shade, int funcs, pdf_function **func, float t0, float t1)
+pdf_sample_shade_function(fz_context *ctx, fz_shade *shade, int funcs, pdf_function **func, float t0, float t1)
 {
 	shade->use_function = 1;
 	if (funcs == 1)
-		pdf_sample_composite_shade_function(shade, func[0], t0, t1);
+		pdf_sample_composite_shade_function(ctx, shade, func[0], t0, t1);
 	else
-		pdf_sample_component_shade_function(shade, funcs, func, t0, t1);
+		pdf_sample_component_shade_function(ctx, shade, funcs, func, t0, t1);
 }
 
 /* Type 1-3 -- Function-based, axial and radial shadings */
@@ -413,7 +413,7 @@ pdf_load_function_based_shading(fz_shade *shade, pdf_xref *xref, fz_obj *dict, p
 
 				fv[0] = v[i].x;
 				fv[1] = v[i].y;
-				pdf_eval_function(func, fv, 2, v[i].c, shade->colorspace->n);
+				pdf_eval_function(ctx, func, fv, 2, v[i].c, shade->colorspace->n);
 
 				pt.x = v[i].x;
 				pt.y = v[i].y;
@@ -460,7 +460,7 @@ pdf_load_axial_shading(fz_shade *shade, pdf_xref *xref, fz_obj *dict, int funcs,
 		e1 = fz_to_bool(ctx, fz_array_get(ctx, obj, 1));
 	}
 
-	pdf_sample_shade_function(shade, funcs, func, d0, d1);
+	pdf_sample_shade_function(ctx, shade, funcs, func, d0, d1);
 
 	shade->type = FZ_LINEAR;
 
@@ -513,7 +513,7 @@ pdf_load_radial_shading(fz_shade *shade, pdf_xref *xref, fz_obj *dict, int funcs
 		e1 = fz_to_bool(ctx, fz_array_get(ctx, obj, 1));
 	}
 
-	pdf_sample_shade_function(shade, funcs, func, d0, d1);
+	pdf_sample_shade_function(ctx, shade, funcs, func, d0, d1);
 
 	shade->type = FZ_RADIAL;
 
@@ -619,7 +619,7 @@ pdf_load_type4_shade(fz_shade *shade, pdf_xref *xref, fz_obj *dict,
 	if (funcs > 0)
 	{
 		ncomp = 1;
-		pdf_sample_shade_function(shade, funcs, func, p.c0[0], p.c1[0]);
+		pdf_sample_shade_function(ctx, shade, funcs, func, p.c0[0], p.c1[0]);
 	}
 	else
 		ncomp = shade->colorspace->n;
@@ -684,7 +684,7 @@ pdf_load_type5_shade(fz_shade *shade, pdf_xref *xref, fz_obj *dict,
 	if (funcs > 0)
 	{
 		ncomp = 1;
-		pdf_sample_shade_function(shade, funcs, func, p.c0[0], p.c1[0]);
+		pdf_sample_shade_function(ctx, shade, funcs, func, p.c0[0], p.c1[0]);
 	}
 	else
 		ncomp = shade->colorspace->n;
@@ -735,7 +735,7 @@ pdf_load_type6_shade(fz_shade *shade, pdf_xref *xref, fz_obj *dict,
 	if (funcs > 0)
 	{
 		ncomp = 1;
-		pdf_sample_shade_function(shade, funcs, func, p.c0[0], p.c1[0]);
+		pdf_sample_shade_function(ctx, shade, funcs, func, p.c0[0], p.c1[0]);
 	}
 	else
 		ncomp = shade->colorspace->n;
@@ -854,7 +854,7 @@ pdf_load_type7_shade(fz_shade *shade, pdf_xref *xref, fz_obj *dict,
 	if (funcs > 0)
 	{
 		ncomp = 1;
-		pdf_sample_shade_function(shade, funcs, func, p.c0[0], p.c1[0]);
+		pdf_sample_shade_function(ctx, shade, funcs, func, p.c0[0], p.c1[0]);
 	}
 	else
 		ncomp = shade->colorspace->n;
@@ -996,13 +996,13 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 	if (!obj)
 	{
 		fz_drop_shade(ctx, shade);
-		return fz_error_make("shading colorspace is missing");
+		return fz_error_make(ctx, "shading colorspace is missing");
 	}
 	error = pdf_load_colorspace(&shade->colorspace, xref, obj);
 	if (error)
 	{
 		fz_drop_shade(ctx, shade);
-		return fz_error_note(error, "cannot load colorspace (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+		return fz_error_note(ctx, error, "cannot load colorspace (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 	}
 
 	obj = fz_dict_gets(ctx, dict, "Background");
@@ -1027,7 +1027,7 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 		error = pdf_load_function(&func[0], xref, obj);
 		if (error)
 		{
-			error = fz_error_note(error, "cannot load shading function (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+			error = fz_error_note(ctx, error, "cannot load shading function (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 			goto cleanup;
 		}
 	}
@@ -1036,7 +1036,7 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 		funcs = fz_array_len(ctx, obj);
 		if (funcs != 1 && funcs != shade->colorspace->n)
 		{
-			error = fz_error_make("incorrect number of shading functions");
+			error = fz_error_make(ctx, "incorrect number of shading functions");
 			goto cleanup;
 		}
 
@@ -1045,7 +1045,7 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 			error = pdf_load_function(&func[i], xref, fz_array_get(ctx, obj, i));
 			if (error)
 			{
-				error = fz_error_note(error, "cannot load shading function (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+				error = fz_error_note(ctx, error, "cannot load shading function (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 				goto cleanup;
 			}
 		}
@@ -1056,7 +1056,7 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 		error = pdf_open_stream(&stream, xref, fz_to_num(dict), fz_to_gen(dict));
 		if (error)
 		{
-			error = fz_error_note(error, "cannot open shading stream (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
+			error = fz_error_note(ctx, error, "cannot open shading stream (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 			goto cleanup;
 		}
 	}
@@ -1071,7 +1071,7 @@ pdf_load_shading_dict(fz_shade **shadep, pdf_xref *xref, fz_obj *dict, fz_matrix
 	case 6: pdf_load_type6_shade(shade, xref, dict, funcs, func, stream); break;
 	case 7: pdf_load_type7_shade(shade, xref, dict, funcs, func, stream); break;
 	default:
-		error = fz_error_make("unknown shading type: %d", type);
+		error = fz_error_make(ctx, "unknown shading type: %d", type);
 		goto cleanup;
 	}
 
@@ -1092,7 +1092,7 @@ cleanup:
 			pdf_drop_function(ctx, func[i]);
 	fz_drop_shade(ctx, shade);
 
-	return fz_error_note(error, "cannot load shading type %d (%d %d R)", type, fz_to_num(dict), fz_to_gen(dict));
+	return fz_error_note(ctx, error, "cannot load shading type %d (%d %d R)", type, fz_to_num(dict), fz_to_gen(dict));
 }
 
 fz_error
@@ -1123,17 +1123,17 @@ pdf_load_shading(fz_shade **shadep, pdf_xref *xref, fz_obj *dict)
 		{
 			if (fz_dict_gets(ctx, obj, "CA") || fz_dict_gets(ctx, obj, "ca"))
 			{
-				fz_warn("shading with alpha not supported");
+				fz_warn(ctx, "shading with alpha not supported");
 			}
 		}
 
 		obj = fz_dict_gets(ctx, dict, "Shading");
 		if (!obj)
-			return fz_error_make("syntaxerror: missing shading dictionary");
+			return fz_error_make(ctx, "syntaxerror: missing shading dictionary");
 
 		error = pdf_load_shading_dict(shadep, xref, obj, mat);
 		if (error)
-			return fz_error_note(error, "cannot load shading dictionary (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+			return fz_error_note(ctx, error, "cannot load shading dictionary (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 	}
 
 	/* Naked shading dictionary */
@@ -1141,7 +1141,7 @@ pdf_load_shading(fz_shade **shadep, pdf_xref *xref, fz_obj *dict)
 	{
 		error = pdf_load_shading_dict(shadep, xref, dict, fz_identity);
 		if (error)
-			return fz_error_note(error, "cannot load shading dictionary (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
+			return fz_error_note(ctx, error, "cannot load shading dictionary (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}
 
 	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)fz_keep_shade, (pdf_store_drop_fn *)fz_drop_shade, dict, *shadep);

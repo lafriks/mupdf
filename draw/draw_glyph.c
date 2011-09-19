@@ -81,7 +81,7 @@ fz_render_glyph(fz_context *ctx, fz_glyph_cache *cache, fz_font *font, int gid, 
 	if (size > MAX_FONT_SIZE)
 	{
 		/* TODO: this case should be handled by rendering glyph as a path fill */
-		fz_warn("font size too large (%g), not rendering glyph", size);
+		fz_warn(ctx, "font size too large (%g), not rendering glyph", size);
 		return NULL;
 	}
 
@@ -112,7 +112,7 @@ fz_render_glyph(fz_context *ctx, fz_glyph_cache *cache, fz_font *font, int gid, 
 	}
 	else
 	{
-		fz_warn("assert: uninitialized font structure");
+		fz_warn(ctx, "assert: uninitialized font structure");
 		return NULL;
 	}
 

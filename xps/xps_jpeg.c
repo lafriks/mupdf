@@ -64,7 +64,7 @@ xps_decode_jpeg(fz_context *ctx, fz_pixmap **imagep, byte *rbuf, int rlen)
 	{
 		if (image)
 			fz_drop_pixmap(ctx, image);
-		return fz_error_make("jpeg error: %s", err.msg);
+		return fz_error_make(ctx, "jpeg error: %s", err.msg);
 	}
 
 	cinfo.err = jpeg_std_error(&err.super);
@@ -92,14 +92,14 @@ xps_decode_jpeg(fz_context *ctx, fz_pixmap **imagep, byte *rbuf, int rlen)
 	else if (cinfo.output_components == 4)
 		colorspace = fz_device_cmyk;
 	else
-		return fz_error_make("bad number of components in jpeg: %d", cinfo.output_components);
+		return fz_error_make(ctx, "bad number of components in jpeg: %d", cinfo.output_components);
 
 	image = fz_new_pixmap_with_limit(ctx, colorspace, cinfo.output_width, cinfo.output_height);
 	if (!image)
 	{
 		jpeg_finish_decompress(&cinfo);
 		jpeg_destroy_decompress(&cinfo);
-		return fz_error_make("out of memory");
+		return fz_error_make(ctx, "out of memory");
 	}
 
 	if (cinfo.density_unit == 1)

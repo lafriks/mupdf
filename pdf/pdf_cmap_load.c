@@ -24,14 +24,14 @@ pdf_load_embedded_cmap(pdf_cmap **cmapp, pdf_xref *xref, fz_obj *stmobj)
 	error = pdf_open_stream(&file, xref, fz_to_num(stmobj), fz_to_gen(stmobj));
 	if (error)
 	{
-		error = fz_error_note(error, "cannot open cmap stream (%d %d R)", fz_to_num(stmobj), fz_to_gen(stmobj));
+		error = fz_error_note(ctx, error, "cannot open cmap stream (%d %d R)", fz_to_num(stmobj), fz_to_gen(stmobj));
 		goto cleanup;
 	}
 
 	error = pdf_parse_cmap(&cmap, file);
 	if (error)
 	{
-		error = fz_error_note(error, "cannot parse cmap stream (%d %d R)", fz_to_num(stmobj), fz_to_gen(stmobj));
+		error = fz_error_note(ctx, error, "cannot parse cmap stream (%d %d R)", fz_to_num(stmobj), fz_to_gen(stmobj));
 		goto cleanup;
 	}
 
@@ -47,7 +47,7 @@ pdf_load_embedded_cmap(pdf_cmap **cmapp, pdf_xref *xref, fz_obj *stmobj)
 		error = pdf_load_system_cmap(ctx, &usecmap, fz_to_name(ctx, obj));
 		if (error)
 		{
-			error = fz_error_note(error, "cannot load system usecmap '%s'", fz_to_name(ctx, obj));
+			error = fz_error_note(ctx, error, "cannot load system usecmap '%s'", fz_to_name(ctx, obj));
 			goto cleanup;
 		}
 		pdf_set_usecmap(ctx, cmap, usecmap);
@@ -58,7 +58,7 @@ pdf_load_embedded_cmap(pdf_cmap **cmapp, pdf_xref *xref, fz_obj *stmobj)
 		error = pdf_load_embedded_cmap(&usecmap, xref, obj);
 		if (error)
 		{
-			error = fz_error_note(error, "cannot load embedded usecmap (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+			error = fz_error_note(ctx, error, "cannot load embedded usecmap (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 			goto cleanup;
 		}
 		pdf_set_usecmap(ctx, cmap, usecmap);
@@ -86,7 +86,7 @@ pdf_new_identity_cmap(fz_context *ctx, int wmode, int bytes)
 {
 	pdf_cmap *cmap = pdf_new_cmap(ctx);
 	sprintf(cmap->cmap_name, "Identity-%c", wmode ? 'V' : 'H');
-	pdf_add_codespace(cmap, 0x0000, 0xffff, bytes);
+	pdf_add_codespace(ctx, cmap, 0x0000, 0xffff, bytes);
 	pdf_map_range_to_range(ctx, cmap, 0x0000, 0xffff, 0);
 	pdf_sort_cmap(ctx, cmap);
 	pdf_set_wmode(cmap, wmode);
@@ -104,13 +104,13 @@ pdf_load_system_cmap(fz_context *ctx, pdf_cmap **cmapp, char *cmap_name)
 
 	cmap = pdf_find_builtin_cmap(cmap_name);
 	if (!cmap)
-		return fz_error_make("no builtin cmap file: %s", cmap_name);
+		return fz_error_make(ctx, "no builtin cmap file: %s", cmap_name);
 
 	if (cmap->usecmap_name[0] && !cmap->usecmap)
 	{
 		usecmap = pdf_find_builtin_cmap(cmap->usecmap_name);
 		if (!usecmap)
-			return fz_error_make("nu builtin cmap file: %s", cmap->usecmap_name);
+			return fz_error_make(ctx, "nu builtin cmap file: %s", cmap->usecmap_name);
 		pdf_set_usecmap(ctx, cmap, usecmap);
 	}
 

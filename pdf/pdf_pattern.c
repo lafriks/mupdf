@@ -45,7 +45,7 @@ pdf_load_pattern(pdf_pattern **patp, pdf_xref *xref, fz_obj *dict)
 	{
 		pdf_remove_item(ctx, xref->store, (pdf_store_drop_fn *)pdf_drop_pattern, dict);
 		pdf_drop_pattern(ctx, pat);
-		return fz_error_note(error, "cannot load pattern stream (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
+		return fz_error_note(ctx, error, "cannot load pattern stream (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}
 
 	*patp = pat;

@@ -333,7 +333,7 @@ lex_hex_string(fz_stream *f, char *buf, int n)
 		case EOF:
 			goto end;
 		default:
-			fz_warn("ignoring invalid character in hex string: '%c'", c);
+			fz_warn(f->ctx, "ignoring invalid character in hex string: '%c'", c);
 		}
 	}
 end:
@@ -457,5 +457,5 @@ pdf_lex(int *tok, fz_stream *f, char *buf, int n, int *sl)
 
 cleanuperror:
 	*tok = PDF_TOK_ERROR;
-	return fz_error_make("lexical error");
+	return fz_error_make(f->ctx, "lexical error");
 }

@@ -11,7 +11,7 @@ static int dorgb = 0;
 
 void die(fz_error error)
 {
-	fz_error_handle(error, "aborting");
+	fz_error_handle(ctx, error, "aborting");
 	if (xref)
 		pdf_free_xref(xref);
 	exit(1);
@@ -71,7 +71,7 @@ static void saveimage(int num)
 	{
 		sprintf(name, "img-%04d.pam", num);
 		printf("extracting image %s\n", name);
-		fz_write_pam(img, name, 0);
+		fz_write_pam(ctx, img, name, 0);
 	}
 
 	fz_drop_pixmap(ctx, img);
@@ -116,7 +116,7 @@ static void savefont(fz_obj *dict, int num)
 
 		obj = fz_dict_gets(ctx, obj, "Subtype");
 		if (obj && !fz_is_name(ctx, obj))
-			die(fz_error_make("Invalid font descriptor subtype"));
+			die(fz_error_make(ctx, "Invalid font descriptor subtype"));
 
 		subtype = fz_to_name(ctx, obj);
 		if (!strcmp(subtype, "Type1C"))
@@ -124,12 +124,12 @@ static void savefont(fz_obj *dict, int num)
 		else if (!strcmp(subtype, "CIDFontType0C"))
 			ext = "cid";
 		else
-			die(fz_error_make("Unhandled font type '%s'", subtype));
+			die(fz_error_make(ctx, "Unhandled font type '%s'", subtype));
 	}
 
 	if (!stream)
 	{
-		fz_warn("Unhandled font type");
+		fz_warn(ctx, "Unhandled font type");
 		return;
 	}
 
@@ -144,14 +144,14 @@ static void savefont(fz_obj *dict, int num)
 
 	f = fopen(name, "wb");
 	if (f == NULL)
-		die(fz_error_make("Error creating font file"));
+		die(fz_error_make(ctx, "Error creating font file"));
 
 	n = fwrite(buf->data, 1, buf->len, f);
 	if (n < buf->len)
-		die(fz_error_make("Error writing font file"));
+		die(fz_error_make(ctx, "Error writing font file"));
 
 	if (fclose(f) < 0)
-		die(fz_error_make("Error closing font file"));
+		die(fz_error_make(ctx, "Error closing font file"));
 
 	fz_drop_buffer(ctx, buf);
 }
@@ -162,7 +162,7 @@ static void showobject(int num)
 	fz_obj *obj;
 
 	if (!xref)
-		die(fz_error_make("no file specified"));
+		die(fz_error_make(ctx, "no file specified"));
 
 	error = pdf_load_object(&obj, xref, num, 0);
 	if (error)
@@ -200,11 +200,11 @@ int main(int argc, char **argv)
 
 	ctx = fz_context_init(&fz_alloc_default);
 	if (ctx == NULL)
-		die(fz_error_note(1, "failed to initialise context"));
+		die(fz_error_note(ctx, 1, "failed to initialise context"));
 
 	error = pdf_open_xref(ctx, &xref, infile, password);
 	if (error)
-		die(fz_error_note(error, "cannot open input file '%s'", infile));
+		die(fz_error_note(ctx, error, "cannot open input file '%s'", infile));
 
 	if (fz_optind == argc)
 	{
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
 
 	pdf_free_xref(xref);
 
-	fz_flush_warnings();
+	fz_flush_warnings(ctx);
 	fz_context_fin(ctx);
 
 	return 0;

@@ -378,7 +378,7 @@ xml_parse_document(fz_context *ctx, unsigned char *s, int n)
 
 	error = xml_parse_document_imp(&parser, p);
 	if (error) {
-		fz_error_make(error, "");
+		fz_error_make(ctx, error, "");
 		return NULL;
 	}
 

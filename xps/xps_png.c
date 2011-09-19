@@ -225,7 +225,7 @@ png_read_ihdr(struct info *info, unsigned char *p, int size)
 	int color, compression, filter;
 
 	if (size != 13)
-		return fz_error_make("IHDR chunk is the wrong size");
+		return fz_error_make(info->ctx, "IHDR chunk is the wrong size");
 
 	info->width = getint(p + 0);
 	info->height = getint(p + 4);
@@ -237,21 +237,21 @@ png_read_ihdr(struct info *info, unsigned char *p, int size)
 	info->interlace = p[12];
 
 	if (info->width <= 0)
-		return fz_error_make("image width must be > 0");
+		return fz_error_make(info->ctx, "image width must be > 0");
 	if (info->height <= 0)
-		return fz_error_make("image height must be > 0");
+		return fz_error_make(info->ctx, "image height must be > 0");
 
 	if (info->depth != 1 && info->depth != 2 && info->depth != 4 &&
 			info->depth != 8 && info->depth != 16)
-		return fz_error_make("image bit depth must be one of 1, 2, 4, 8, 16");
+		return fz_error_make(info->ctx, "image bit depth must be one of 1, 2, 4, 8, 16");
 	if (color == 2 && info->depth < 8)
-		return fz_error_make("illegal bit depth for truecolor");
+		return fz_error_make(info->ctx, "illegal bit depth for truecolor");
 	if (color == 3 && info->depth > 8)
-		return fz_error_make("illegal bit depth for indexed");
+		return fz_error_make(info->ctx, "illegal bit depth for indexed");
 	if (color == 4 && info->depth < 8)
-		return fz_error_make("illegal bit depth for grayscale with alpha");
+		return fz_error_make(info->ctx, "illegal bit depth for grayscale with alpha");
 	if (color == 6 && info->depth < 8)
-		return fz_error_make("illegal bit depth for truecolor with alpha");
+		return fz_error_make(info->ctx, "illegal bit depth for truecolor with alpha");
 
 	info->indexed = 0;
 	if (color == 0) /* gray */
@@ -268,14 +268,14 @@ png_read_ihdr(struct info *info, unsigned char *p, int size)
 		info->n = 1;
 	}
 	else
-		return fz_error_make("unknown color type");
+		return fz_error_make(info->ctx, "unknown color type");
 
 	if (compression != 0)
-		return fz_error_make("unknown compression method");
+		return fz_error_make(info->ctx, "unknown compression method");
 	if (filter != 0)
-		return fz_error_make("unknown filter method");
+		return fz_error_make(info->ctx, "unknown filter method");
 	if (info->interlace != 0 && info->interlace != 1)
-		return fz_error_make("interlace method not supported");
+		return fz_error_make(info->ctx, "interlace method not supported");
 
 	return fz_okay;
 }
@@ -287,7 +287,7 @@ png_read_plte(struct info *info, unsigned char *p, int size)
 	int i;
 
 	if (n > 256 || n > (1 << info->depth))
-		return fz_error_make("too many samples in palette");
+		return fz_error_make(info->ctx, "too many samples in palette");
 
 	for (i = 0; i < n; i++)
 	{
@@ -309,14 +309,14 @@ png_read_trns(struct info *info, unsigned char *p, int size)
 	if (info->indexed)
 	{
 		if (size > 256 || size > (1 << info->depth))
-			return fz_error_make("too many samples in transparency table");
+			return fz_error_make(info->ctx, "too many samples in transparency table");
 		for (i = 0; i < size; i++)
 			info->palette[i * 4 + 3] = p[i];
 	}
 	else
 	{
 		if (size != info->n * 2)
-			return fz_error_make("tRNS chunk is the wrong size");
+			return fz_error_make(info->ctx, "tRNS chunk is the wrong size");
 		for (i = 0; i < info->n; i++)
 			info->trns[i] = (p[i * 2] << 8 | p[i * 2 + 1]) & ((1 << info->depth) - 1);
 	}
@@ -334,12 +334,12 @@ png_read_idat(struct info *info, unsigned char *p, int size, z_stream *stm)
 
 	code = inflate(stm, Z_SYNC_FLUSH);
 	if (code != Z_OK && code != Z_STREAM_END)
-		return fz_error_make("zlib error: %s", stm->msg);
+		return fz_error_make(info->ctx, "zlib error: %s", stm->msg);
 	if (stm->avail_in != 0)
 	{
 		if (stm->avail_out == 0)
-			return fz_error_make("ran out of output before input");
-		return fz_error_make("inflate did not consume buffer (%d remaining)", stm->avail_in);
+			return fz_error_make(info->ctx, "ran out of output before input");
+		return fz_error_make(info->ctx, "inflate did not consume buffer (%d remaining)", stm->avail_in);
 	}
 
 	return fz_okay;
@@ -349,7 +349,7 @@ static int
 png_read_phys(struct info *info, unsigned char *p, int size)
 {
 	if (size != 9)
-		return fz_error_make("pHYs chunk is the wrong size");
+		return fz_error_make(info->ctx, "pHYs chunk is the wrong size");
 	if (p[8] == 1)
 	{
 		info->xres = getint(p) * 254 / 10000;
@@ -373,7 +373,7 @@ png_read_image(struct info *info, unsigned char *p, int total)
 	/* Read signature */
 
 	if (total < 8 + 12 || memcmp(p, png_signature, 8))
-		return fz_error_make("not a png image (wrong signature)");
+		return fz_error_make(info->ctx, "not a png image (wrong signature)");
 
 	p += 8;
 	total -= 8;
@@ -383,16 +383,16 @@ png_read_image(struct info *info, unsigned char *p, int total)
 	size = getint(p);
 
 	if (size + 12 > total)
-		return fz_error_make("premature end of data in png image");
+		return fz_error_make(info->ctx, "premature end of data in png image");
 
 	if (!memcmp(p + 4, "IHDR", 4))
 	{
 		code = png_read_ihdr(info, p + 8, size);
 		if (code)
-			return fz_error_note(code, "cannot read png header");
+			return fz_error_note(info->ctx, code, "cannot read png header");
 	}
 	else
-		return fz_error_make("png file must start with IHDR chunk");
+		return fz_error_make(info->ctx, "png file must start with IHDR chunk");
 
 	p += size + 12;
 	total -= size + 12;
@@ -420,7 +420,7 @@ png_read_image(struct info *info, unsigned char *p, int total)
 
 	code = inflateInit(&stm);
 	if (code != Z_OK)
-		return fz_error_make("zlib error: %s", stm.msg);
+		return fz_error_make(info->ctx, "zlib error: %s", stm.msg);
 
 	/* Read remaining chunks until IEND */
 
@@ -429,34 +429,34 @@ png_read_image(struct info *info, unsigned char *p, int total)
 		size = getint(p);
 
 		if (size + 12 > total)
-			return fz_error_make("premature end of data in png image");
+			return fz_error_make(info->ctx, "premature end of data in png image");
 
 		if (!memcmp(p + 4, "PLTE", 4))
 		{
 			code = png_read_plte(info, p + 8, size);
 			if (code)
-				return fz_error_note(code, "cannot read png palette");
+				return fz_error_note(info->ctx, code, "cannot read png palette");
 		}
 
 		if (!memcmp(p + 4, "tRNS", 4))
 		{
 			code = png_read_trns(info, p + 8, size);
 			if (code)
-				return fz_error_note(code, "cannot read png transparency");
+				return fz_error_note(info->ctx, code, "cannot read png transparency");
 		}
 
 		if (!memcmp(p + 4, "pHYs", 4))
 		{
 			code = png_read_phys(info, p + 8, size);
 			if (code)
-				return fz_error_note(code, "cannot read png resolution");
+				return fz_error_note(info->ctx, code, "cannot read png resolution");
 		}
 
 		if (!memcmp(p + 4, "IDAT", 4))
 		{
 			code = png_read_idat(info, p + 8, size, &stm);
 			if (code)
-				return fz_error_note(code, "cannot read png image data");
+				return fz_error_note(info->ctx, code, "cannot read png image data");
 		}
 
 		if (!memcmp(p + 4, "IEND", 4))
@@ -468,7 +468,7 @@ png_read_image(struct info *info, unsigned char *p, int total)
 
 	code = inflateEnd(&stm);
 	if (code != Z_OK)
-		return fz_error_make("zlib error: %s", stm.msg);
+		return fz_error_make(info->ctx, "zlib error: %s", stm.msg);
 
 	/* Apply prediction filter and deinterlacing */
 
@@ -544,7 +544,7 @@ xps_decode_png(fz_context *ctx, fz_pixmap **imagep, byte *p, int total)
 	png.ctx = ctx;
 	code = png_read_image(&png, p, total);
 	if (code)
-		return fz_error_note(code, "cannot read png image");
+		return fz_error_note(ctx, code, "cannot read png image");
 
 	if (png.n == 3 || png.n == 4)
 		colorspace = fz_device_rgb;
@@ -557,7 +557,7 @@ xps_decode_png(fz_context *ctx, fz_pixmap **imagep, byte *p, int total)
 	if (!image)
 	{
 		fz_free(png.ctx, png.samples);
-		return fz_error_make("out of memory");
+		return fz_error_make(ctx, "out of memory");
 	}
 
 	image->xres = png.xres;

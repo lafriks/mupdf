@@ -75,25 +75,25 @@ typedef struct fz_font_context fz_font_context;
 
 #if __STDC_VERSION__ == 199901L /* C99 */
 
-#define fz_error_make(...) fz_error_make_imp(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#define fz_error_note(cause, ...) fz_error_note_imp(__FILE__, __LINE__, __func__, cause, __VA_ARGS__)
-#define fz_error_handle(cause, ...) fz_error_handle_imp(__FILE__, __LINE__, __func__, cause, __VA_ARGS__)
+#define fz_error_make(ctx,...) fz_error_make_imp(ctx,__FILE__, __LINE__, __func__, __VA_ARGS__)
+#define fz_error_note(ctx,cause, ...) fz_error_note_imp(ctx,__FILE__, __LINE__, __func__, cause, __VA_ARGS__)
+#define fz_error_handle(ctx,cause, ...) fz_error_handle_imp(ctx,__FILE__, __LINE__, __func__, cause, __VA_ARGS__)
 
 #elif _MSC_VER >= 1500 /* MSVC 9 or newer */
 
 #define inline __inline
 #define restrict __restrict
-#define fz_error_make(...) fz_error_make_imp(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define fz_error_note(cause, ...) fz_error_note_imp(__FILE__, __LINE__, __FUNCTION__, cause, __VA_ARGS__)
-#define fz_error_handle(cause, ...) fz_error_handle_imp(__FILE__, __LINE__, __FUNCTION__, cause, __VA_ARGS__)
+#define fz_error_make(ctx,...) fz_error_make_imp(ctx,__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#define fz_error_note(ctx,cause, ...) fz_error_note_imp(ctx,__FILE__, __LINE__, __FUNCTION__, cause, __VA_ARGS__)
+#define fz_error_handle(ctx,cause, ...) fz_error_handle_imp(ctx,__FILE__, __LINE__, __FUNCTION__, cause, __VA_ARGS__)
 
 #elif __GNUC__ >= 3 /* GCC 3 or newer */
 
 #define inline __inline
 #define restrict __restrict
-#define fz_error_make(fmt...) fz_error_make_imp(__FILE__, __LINE__, __FUNCTION__, fmt)
-#define fz_error_note(cause, fmt...) fz_error_note_imp(__FILE__, __LINE__, __FUNCTION__, cause, fmt)
-#define fz_error_handle(cause, fmt...) fz_error_handle_imp(__FILE__, __LINE__, __FUNCTION__, cause, fmt)
+#define fz_error_make(ctx,fmt...) fz_error_make_imp(ctx,__FILE__, __LINE__, __FUNCTION__, fmt)
+#define fz_error_note(ctx,cause, fmt...) fz_error_note_imp(ctx,__FILE__, __LINE__, __FUNCTION__, cause, fmt)
+#define fz_error_handle(ctx,cause, fmt...) fz_error_handle_imp(ctx,__FILE__, __LINE__, __FUNCTION__, cause, fmt)
 
 #else /* Unknown or ancient */
 
@@ -126,20 +126,20 @@ typedef int fz_error;
 
 #define fz_okay ((fz_error)0)
 
-void fz_warn(char *fmt, ...) __printflike(1, 2);
-void fz_flush_warnings(void);
+void fz_warn(fz_context *ctx, char *fmt, ...) __printflike(1, 2);
+void fz_flush_warnings(fz_context *ctx);
 
-fz_error fz_error_make_imp(const char *file, int line, const char *func, char *fmt, ...) __printflike(4, 5);
-fz_error fz_error_note_imp(const char *file, int line, const char *func, fz_error cause, char *fmt, ...) __printflike(5, 6);
-void fz_error_handle_imp(const char *file, int line, const char *func, fz_error cause, char *fmt, ...) __printflike(5, 6);
+fz_error fz_error_make_imp(fz_context *ctx, const char *file, int line, const char *func, char *fmt, ...) __printflike(4, 5);
+fz_error fz_error_note_imp(fz_context *ctx, const char *file, int line, const char *func, fz_error cause, char *fmt, ...) __printflike(5, 6);
+void fz_error_handle_imp(fz_context *ctx, const char *file, int line, const char *func, fz_error cause, char *fmt, ...) __printflike(5, 6);
 
-fz_error fz_error_make_impx(char *fmt, ...) __printflike(1, 2);
-fz_error fz_error_note_impx(fz_error cause, char *fmt, ...) __printflike(2, 3);
-void fz_error_handle_impx(fz_error cause, char *fmt, ...) __printflike(2, 3);
+fz_error fz_error_make_impx(fz_context *ctx, char *fmt, ...) __printflike(1, 2);
+fz_error fz_error_note_impx(fz_context *ctx, fz_error cause, char *fmt, ...) __printflike(2, 3);
+void fz_error_handle_impx(fz_context *ctx, fz_error cause, char *fmt, ...) __printflike(2, 3);
 
 /* extract the last error stack trace */
-int fz_get_error_count(void);
-char *fz_get_error_line(int n);
+int fz_get_error_count(fz_context *ctx);
+char *fz_get_error_line(fz_context *ctx, int n);
 
 /*
  * Basic runtime and utility functions
@@ -650,8 +650,8 @@ void fz_gamma_pixmap(fz_pixmap *pix, float gamma);
 fz_pixmap *fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h);
 fz_pixmap *fz_scale_pixmap_gridfit(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h, int gridfit);
 
-fz_error fz_write_pnm(fz_pixmap *pixmap, char *filename);
-fz_error fz_write_pam(fz_pixmap *pixmap, char *filename, int savealpha);
+fz_error fz_write_pnm(fz_context *ctx, fz_pixmap *pixmap, char *filename);
+fz_error fz_write_pam(fz_context *ctx, fz_pixmap *pixmap, char *filename, int savealpha);
 fz_error fz_write_png(fz_context *ctx, fz_pixmap *pixmap, char *filename, int savealpha);
 
 fz_error fz_load_jpx_image(fz_context *ctx, fz_pixmap **imgp, unsigned char *data, int size, fz_colorspace *dcs);
@@ -676,7 +676,7 @@ fz_bitmap *fz_keep_bitmap(fz_bitmap *bit);
 void fz_clear_bitmap(fz_bitmap *bit);
 void fz_drop_bitmap(fz_context *ctx, fz_bitmap *bit);
 
-fz_error fz_write_pbm(fz_bitmap *bitmap, char *filename);
+fz_error fz_write_pbm(fz_context *ctx, fz_bitmap *bitmap, char *filename);
 
 /*
  * A halftone is a set of threshold tiles, one per component. Each threshold
@@ -713,9 +713,9 @@ struct fz_colorspace_s
 	int refs;
 	char name[16];
 	int n;
-	void (*to_rgb)(fz_colorspace *, float *src, float *rgb);
-	void (*from_rgb)(fz_colorspace *, float *rgb, float *dst);
-	void (*free_data)(fz_context *Ctx, fz_colorspace *);
+	void (*to_rgb)(fz_context *ctx, fz_colorspace *, float *src, float *rgb);
+	void (*from_rgb)(fz_context *ctx, fz_colorspace *, float *rgb, float *dst);
+	void (*free_data)(fz_context *ctx, fz_colorspace *);
 	void *data;
 };
 
@@ -723,10 +723,10 @@ fz_colorspace *fz_new_colorspace(fz_context *ctx, char *name, int n);
 fz_colorspace *fz_keep_colorspace(fz_colorspace *colorspace);
 void fz_drop_colorspace(fz_context *ctx, fz_colorspace *colorspace);
 
-void fz_convert_color(fz_colorspace *srcs, float *srcv, fz_colorspace *dsts, float *dstv);
+void fz_convert_color(fz_context *ctx, fz_colorspace *srcs, float *srcv, fz_colorspace *dsts, float *dstv);
 void fz_convert_pixmap(fz_context *ctx, fz_pixmap *src, fz_pixmap *dst);
 
-fz_colorspace *fz_find_device_colorspace(char *name);
+fz_colorspace *fz_find_device_colorspace(fz_context *ctx, char *name);
 
 /*
  * Fonts come in two variants:
@@ -958,9 +958,9 @@ int fz_is_rect_gel(fz_gel *gel);
 
 void fz_scan_convert(fz_gel *gel, int eofill, fz_bbox clip, fz_pixmap *pix, unsigned char *colorbv);
 
-void fz_flatten_fill_path(fz_gel *gel, fz_path *path, fz_matrix ctm, float flatness);
-void fz_flatten_stroke_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth);
-void fz_flatten_dash_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth);
+void fz_flatten_fill_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_matrix ctm, float flatness);
+void fz_flatten_stroke_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth);
+void fz_flatten_dash_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth);
 
 /*
  * The device interface.

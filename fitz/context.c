@@ -45,7 +45,7 @@ fz_context *fz_context_init(fz_alloc_context *alloc)
 	return ctx;
   cleanup:
 	fz_context_fin(ctx);
-	fz_error_handle(error, "fz_context_init failed");
+	fz_error_handle(ctx, error, "fz_context_init failed");
 	return NULL;
 }
 
@@ -75,6 +75,6 @@ fz_context *fz_context_clone(fz_context *ctx)
 	return clone;
   cleanup:
 	fz_context_fin(ctx);
-	fz_error_handle(error, "fz_context_clone failed");
+	fz_error_handle(ctx, error, "fz_context_clone failed");
 	return NULL;
 }

@@ -23,7 +23,7 @@ read_null(fz_stream *stm, unsigned char *buf, int len)
 	int amount = MIN(len, state->remain);
 	int n = fz_read(state->chain, buf, amount);
 	if (n < 0)
-		return fz_error_note(n, "read error in null filter");
+		return fz_error_note(stm->ctx, n, "read error in null filter");
 	state->remain -= n;
 	return n;
 }
@@ -127,7 +127,7 @@ read_ahxd(fz_stream *stm, unsigned char *buf, int len)
 		}
 		else if (!iswhite(c))
 		{
-			return fz_error_make("bad data in ahxd: '%c'", c);
+			return fz_error_make(stm->ctx, "bad data in ahxd: '%c'", c);
 		}
 	}
 
@@ -227,13 +227,13 @@ read_a85d(fz_stream *stm, unsigned char *buf, int len)
 		{
 			c = fz_read_byte(state->chain);
 			if (c != '>')
-				fz_warn("bad eod marker in a85d");
+				fz_warn(stm->ctx, "bad eod marker in a85d");
 
 			switch (count) {
 			case 0:
 				break;
 			case 1:
-				return fz_error_make("partial final byte in a85d");
+				return fz_error_make(stm->ctx, "partial final byte in a85d");
 			case 2:
 				word = word * (85 * 85 * 85) + 0xffffff;
 				state->bp[0] = word >> 24;
@@ -261,7 +261,7 @@ read_a85d(fz_stream *stm, unsigned char *buf, int len)
 
 		else if (!iswhite(c))
 		{
-			return fz_error_make("bad data in a85d: '%c'", c);
+			return fz_error_make(stm->ctx, "bad data in a85d: '%c'", c);
 		}
 
 		while (state->rp < state->wp && p < ep)
@@ -330,7 +330,7 @@ read_rld(fz_stream *stm, unsigned char *buf, int len)
 				state->n = 257 - state->run;
 				state->c = fz_read_byte(state->chain);
 				if (state->c < 0)
-					return fz_error_make("premature end of data in run length decode");
+					return fz_error_make(stm->ctx, "premature end of data in run length decode");
 			}
 		}
 
@@ -340,7 +340,7 @@ read_rld(fz_stream *stm, unsigned char *buf, int len)
 			{
 				int c = fz_read_byte(state->chain);
 				if (c < 0)
-					return fz_error_make("premature end of data in run length decode");
+					return fz_error_make(stm->ctx, "premature end of data in run length decode");
 				*p++ = c;
 				state->n--;
 			}
@@ -402,7 +402,7 @@ read_arc4(fz_stream *stm, unsigned char *buf, int len)
 
 	n = fz_read(state->chain, buf, len);
 	if (n < 0)
-		return fz_error_note(n, "read error in arc4 filter");
+		return fz_error_note(stm->ctx, n, "read error in arc4 filter");
 
 	fz_arc4_encrypt(&state->arc4, buf, buf, n);
 
@@ -456,7 +456,7 @@ read_aesd(fz_stream *stm, unsigned char *buf, int len)
 	{
 		int c = fz_read_byte(state->chain);
 		if (c < 0)
-			return fz_error_make("premature end in aes filter");
+			return fz_error_make(stm->ctx, "premature end in aes filter");
 		state->iv[state->ivcount++] = c;
 	}
 
@@ -467,11 +467,11 @@ read_aesd(fz_stream *stm, unsigned char *buf, int len)
 	{
 		int n = fz_read(state->chain, state->bp, 16);
 		if (n < 0)
-			return fz_error_note(n, "read error in aes filter");
+			return fz_error_note(stm->ctx, n, "read error in aes filter");
 		else if (n == 0)
 			return p - buf;
 		else if (n < 16)
-			return fz_error_make("partial block in aes filter");
+			return fz_error_make(stm->ctx, "partial block in aes filter");
 
 		aes_crypt_cbc(&state->aes, AES_DECRYPT, 16, state->iv, state->bp, state->bp);
 		state->rp = state->bp;
@@ -482,7 +482,7 @@ read_aesd(fz_stream *stm, unsigned char *buf, int len)
 		{
 			int pad = state->bp[15];
 			if (pad < 1 || pad > 16)
-				return fz_error_make("aes padding out of range: %d", pad);
+				return fz_error_make(stm->ctx, "aes padding out of range: %d", pad);
 			state->wp -= pad;
 		}
 

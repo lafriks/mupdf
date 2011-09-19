@@ -23,6 +23,8 @@ struct fz_hash_table_s
 	int size;
 	int load;
 	fz_hash_entry *ents;
+
+	fz_context *ctx;
 };
 
 static unsigned hash(unsigned char *s, int len)
@@ -53,6 +55,8 @@ fz_new_hash_table(fz_context *ctx, int initialsize, int keylen)
 	table->size = initialsize;
 	table->load = 0;
 	table->ents = fz_calloc(ctx, table->size, sizeof(fz_hash_entry));
+
+	table->ctx = ctx;
 
 	return table;
 }
@@ -99,7 +103,7 @@ fz_resize_hash(fz_context *ctx, fz_hash_table *table, int newsize)
 
 	if (newsize < oldload * 8 / 10)
 	{
-		fz_error_make("assert: resize hash too small");
+		fz_error_make(ctx, "assert: resize hash too small");
 		return;
 	}
 
@@ -165,7 +169,7 @@ fz_hash_insert(fz_context *ctx, fz_hash_table *table, void *key, void *val)
 		}
 
 		if (memcmp(key, ents[pos].key, table->keylen) == 0)
-			fz_warn("assert: overwrite hash slot");
+			fz_warn(ctx, "assert: overwrite hash slot");
 
 		pos = (pos + 1) % size;
 	}
@@ -183,7 +187,7 @@ fz_hash_remove(fz_hash_table *table, void *key)
 	{
 		if (!ents[pos].val)
 		{
-			fz_warn("assert: remove inexistant hash entry");
+			fz_warn(table->ctx, "assert: remove inexistant hash entry");
 			return;
 		}
 

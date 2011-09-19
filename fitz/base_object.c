@@ -399,7 +399,7 @@ fz_copy_array(fz_context *ctx, fz_obj *obj)
 	int n;
 
 	if (fz_is_indirect(obj) || !fz_is_array(ctx, obj))
-		fz_warn("assert: not an array (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not an array (%s)", fz_objkindstr(obj));
 
 	new = fz_new_array(ctx, fz_array_len(ctx, obj));
 	n = fz_array_len(ctx, obj);
@@ -438,11 +438,11 @@ fz_array_put(fz_context *ctx, fz_obj *obj, int i, fz_obj *item)
 	obj = fz_resolve_indirect(ctx, obj);
 
 	if (!fz_is_array(ctx, obj))
-		fz_warn("assert: not an array (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not an array (%s)", fz_objkindstr(obj));
 	else if (i < 0)
-		fz_warn("assert: index %d < 0", i);
+		fz_warn(ctx, "assert: index %d < 0", i);
 	else if (i >= obj->u.a.len)
-		fz_warn("assert: index %d > length %d", i, obj->u.a.len);
+		fz_warn(ctx, "assert: index %d > length %d", i, obj->u.a.len);
 	else
 	{
 		if (obj->u.a.items[i])
@@ -457,7 +457,7 @@ fz_array_push(fz_context *ctx, fz_obj *obj, fz_obj *item)
 	obj = fz_resolve_indirect(ctx, obj);
 
 	if (!fz_is_array(ctx, obj))
-		fz_warn("assert: not an array (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not an array (%s)", fz_objkindstr(obj));
 	else
 	{
 		if (obj->u.a.len + 1 > obj->u.a.cap)
@@ -479,7 +479,7 @@ fz_array_insert(fz_context *ctx, fz_obj *obj, fz_obj *item)
 	obj = fz_resolve_indirect(ctx, obj);
 
 	if (!fz_is_array(ctx, obj))
-		fz_warn("assert: not an array (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not an array (%s)", fz_objkindstr(obj));
 	else
 	{
 		if (obj->u.a.len + 1 > obj->u.a.cap)
@@ -545,7 +545,7 @@ fz_copy_dict(fz_context *ctx, fz_obj *obj)
 	int i, n;
 
 	if (fz_is_indirect(obj) || !fz_is_dict(ctx, obj))
-		fz_error_make("assert: not a dict (%s)", fz_objkindstr(obj));
+		fz_error_make(ctx, "assert: not a dict (%s)", fz_objkindstr(obj));
 
 	n = fz_dict_len(ctx, obj);
 	new = fz_new_dict(ctx, n);
@@ -668,7 +668,7 @@ fz_dict_put(fz_context *ctx, fz_obj *obj, fz_obj *key, fz_obj *val)
 
 	if (!fz_is_dict(ctx, obj))
 	{
-		fz_warn("assert: not a dict (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not a dict (%s)", fz_objkindstr(obj));
 		return;
 	}
 
@@ -676,13 +676,13 @@ fz_dict_put(fz_context *ctx, fz_obj *obj, fz_obj *key, fz_obj *val)
 		s = fz_to_name(ctx, key);
 	else
 	{
-		fz_warn("assert: key is not a name (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: key is not a name (%s)", fz_objkindstr(obj));
 		return;
 	}
 
 	if (!val)
 	{
-		fz_warn("assert: val does not exist for key (%s)", s);
+		fz_warn(ctx, "assert: val does not exist for key (%s)", s);
 		return;
 	}
 
@@ -729,7 +729,7 @@ fz_dict_dels(fz_context *ctx, fz_obj *obj, char *key)
 	obj = fz_resolve_indirect(ctx, obj);
 
 	if (!fz_is_dict(ctx, obj))
-		fz_warn("assert: not a dict (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: not a dict (%s)", fz_objkindstr(obj));
 	else
 	{
 		int i = fz_dict_finds(ctx, obj, key);
@@ -750,7 +750,7 @@ fz_dict_del(fz_context *ctx, fz_obj *obj, fz_obj *key)
 	if (fz_is_name(ctx, key))
 		fz_dict_dels(ctx, obj, fz_to_name(ctx, key));
 	else
-		fz_warn("assert: key is not a name (%s)", fz_objkindstr(obj));
+		fz_warn(ctx, "assert: key is not a name (%s)", fz_objkindstr(obj));
 }
 
 void

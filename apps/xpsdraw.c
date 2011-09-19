@@ -28,9 +28,9 @@ struct {
 	int minpage, maxpage;
 } timing;
 
-static void die(fz_error error)
+static void die(fz_context *ctx, fz_error error)
 {
-	fz_error_handle(error, "aborting");
+	fz_error_handle(ctx, error, "aborting");
 	exit(1);
 }
 
@@ -100,7 +100,7 @@ static void drawpage(xps_context *ctx, int pagenum)
 
 	code = xps_load_page(&page, ctx, pagenum - 1);
 	if (code)
-		die(fz_error_note(code, "cannot load page %d in file '%s'", pagenum, filename));
+		die(ctx->ctx, fz_error_note(ctx->ctx, code, "cannot load page %d in file '%s'", pagenum, filename));
 
 	list = NULL;
 
@@ -183,9 +183,9 @@ static void drawpage(xps_context *ctx, int pagenum)
 			char buf[512];
 			sprintf(buf, output, pagenum);
 			if (strstr(output, ".pgm") || strstr(output, ".ppm") || strstr(output, ".pnm"))
-				fz_write_pnm(pix, buf);
+				fz_write_pnm(ctx->ctx, pix, buf);
 			else if (strstr(output, ".pam"))
-				fz_write_pam(pix, buf, savealpha);
+				fz_write_pam(ctx->ctx, pix, buf, savealpha);
 			else if (strstr(output, ".png"))
 				fz_write_png(ctx->ctx, pix, buf, savealpha);
 		}
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
 
 		code = xps_open_file(fzctx, &ctx, filename);
 		if (code)
-			die(fz_error_note(code, "cannot open document: %s", filename));
+			die(ctx->ctx, fz_error_note(ctx->ctx, code, "cannot open document: %s", filename));
 
 		if (showxml)
 			printf("<document name=\"%s\">\n", filename);

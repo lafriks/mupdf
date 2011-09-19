@@ -83,7 +83,7 @@ pdf_load_page_tree_node(pdf_xref *xref, fz_obj *node, struct info info)
 
 		if (xref->page_len == xref->page_cap)
 		{
-			fz_warn("found more pages than expected");
+			fz_warn(ctx, "found more pages than expected");
 			xref->page_cap ++;
 			xref->page_refs = fz_realloc(ctx, xref->page_refs, xref->page_cap * sizeof(fz_obj*));
 			xref->page_objs = fz_realloc(ctx, xref->page_objs, xref->page_cap * sizeof(fz_obj*));
@@ -105,9 +105,9 @@ pdf_load_page_tree(pdf_xref *xref)
 	fz_obj *count = fz_dict_gets(ctx, pages, "Count");
 
 	if (!fz_is_dict(ctx, pages))
-		return fz_error_make("missing page tree");
+		return fz_error_make(ctx, "missing page tree");
 	if (!fz_is_int(ctx, count))
-		return fz_error_make("missing page count");
+		return fz_error_make(ctx, "missing page count");
 
 	xref->page_cap = fz_to_int(ctx, count);
 	xref->page_len = 0;
@@ -220,7 +220,7 @@ pdf_load_page_contents_array(fz_buffer **bigbufp, pdf_xref *xref, fz_obj *list)
 		error = pdf_load_stream(&one, xref, fz_to_num(stm), fz_to_gen(stm));
 		if (error)
 		{
-			fz_error_handle(error, "cannot load content stream part %d/%d", i + 1, n);
+			fz_error_handle(ctx, error, "cannot load content stream part %d/%d", i + 1, n);
 			continue;
 		}
 
@@ -236,7 +236,7 @@ pdf_load_page_contents_array(fz_buffer **bigbufp, pdf_xref *xref, fz_obj *list)
 	if (n > 0 && big->len == 0)
 	{
 		fz_drop_buffer(ctx, big);
-		return fz_error_make("cannot load content stream");
+		return fz_error_make(ctx, "cannot load content stream");
 	}
 
 	*bigbufp = big;
@@ -253,17 +253,17 @@ pdf_load_page_contents(fz_buffer **bufp, pdf_xref *xref, fz_obj *obj)
 	{
 		error = pdf_load_page_contents_array(bufp, xref, obj);
 		if (error)
-			return fz_error_note(error, "cannot load content stream array");
+			return fz_error_note(ctx, error, "cannot load content stream array");
 	}
 	else if (pdf_is_stream(xref, fz_to_num(obj), fz_to_gen(obj)))
 	{
 		error = pdf_load_stream(bufp, xref, fz_to_num(obj), fz_to_gen(obj));
 		if (error)
-			return fz_error_note(error, "cannot load content stream (%d 0 R)", fz_to_num(obj));
+			return fz_error_note(ctx, error, "cannot load content stream (%d 0 R)", fz_to_num(obj));
 	}
 	else
 	{
-		fz_warn("page contents missing, leaving page blank");
+		fz_warn(ctx, "page contents missing, leaving page blank");
 		*bufp = fz_new_buffer(ctx, 0);
 	}
 
@@ -282,7 +282,7 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 	fz_context *ctx = xref->ctx;
 
 	if (number < 0 || number >= xref->page_len)
-		return fz_error_make("cannot find page %d", number + 1);
+		return fz_error_make(ctx, "cannot find page %d", number + 1);
 
 	/* Ensure that we have a store for resource objects */
 	if (!xref->store)
@@ -302,7 +302,7 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 	bbox = fz_round_rect(pdf_to_rect(ctx, obj));
 	if (fz_is_empty_rect(pdf_to_rect(ctx, obj)))
 	{
-		fz_warn("cannot find page size for page %d", number + 1);
+		fz_warn(ctx, "cannot find page size for page %d", number + 1);
 		bbox.x0 = 0;
 		bbox.y0 = 0;
 		bbox.x1 = 612;
@@ -323,7 +323,7 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 
 	if (page->mediabox.x1 - page->mediabox.x0 < 1 || page->mediabox.y1 - page->mediabox.y0 < 1)
 	{
-		fz_warn("invalid page size in page %d", number + 1);
+		fz_warn(ctx, "invalid page size in page %d", number + 1);
 		page->mediabox = fz_unit_rect;
 	}
 
@@ -345,7 +345,7 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 	if (error)
 	{
 		pdf_free_page(ctx, page);
-		return fz_error_note(error, "cannot load page %d contents (%d 0 R)", number + 1, fz_to_num(pageref));
+		return fz_error_note(ctx, error, "cannot load page %d contents (%d 0 R)", number + 1, fz_to_num(pageref));
 	}
 
 	if (pdf_resources_use_blending(ctx, page->resources))

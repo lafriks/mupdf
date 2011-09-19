@@ -68,21 +68,21 @@ xps_parse_remote_resource_dictionary(xps_context *ctx, xps_resource **dictp, cha
 	part = xps_read_part(ctx, part_name);
 	if (!part)
 	{
-		return fz_error_make("cannot find remote resource part '%s'", part_name);
+		return fz_error_make(ctx->ctx, "cannot find remote resource part '%s'", part_name);
 	}
 
 	xml = xml_parse_document(ctx->ctx, part->data, part->size);
 	if (!xml)
 	{
 		xps_free_part(ctx, part);
-		return fz_error_note(-1, "cannot parse xml");
+		return fz_error_note(ctx->ctx, -1, "cannot parse xml");
 	}
 
 	if (strcmp(xml_tag(xml), "ResourceDictionary"))
 	{
 		xml_free_element(ctx->ctx, xml);
 		xps_free_part(ctx, part);
-		return fz_error_make("expected ResourceDictionary element (found %s)", xml_tag(xml));
+		return fz_error_make(ctx->ctx, "expected ResourceDictionary element (found %s)", xml_tag(xml));
 	}
 
 	fz_strlcpy(part_uri, part_name, sizeof part_uri);
@@ -95,7 +95,7 @@ xps_parse_remote_resource_dictionary(xps_context *ctx, xps_resource **dictp, cha
 	{
 		xml_free_element(ctx->ctx, xml);
 		xps_free_part(ctx, part);
-		return fz_error_note(code, "cannot parse remote resource dictionary: %s", part_uri);
+		return fz_error_note(ctx->ctx, code, "cannot parse remote resource dictionary: %s", part_uri);
 	}
 
 	dict->base_xml = xml; /* pass on ownership */
@@ -121,7 +121,7 @@ xps_parse_resource_dictionary(xps_context *ctx, xps_resource **dictp, char *base
 	{
 		code = xps_parse_remote_resource_dictionary(ctx, dictp, base_uri, source);
 		if (code)
-			return fz_error_note(code, "cannot parse remote resource dictionary");
+			return fz_error_note(ctx->ctx, code, "cannot parse remote resource dictionary");
 		return fz_okay;
 	}
 
@@ -146,7 +146,7 @@ xps_parse_resource_dictionary(xps_context *ctx, xps_resource **dictp, char *base
 	if (head)
 		head->base_uri = fz_strdup(ctx->ctx, base_uri);
 	else
-		return fz_error_make("empty resource dictionary");
+		return fz_error_make(ctx->ctx, "empty resource dictionary");
 
 	*dictp = head;
 	return fz_okay;

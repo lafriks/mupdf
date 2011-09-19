@@ -54,13 +54,13 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		tile = NULL;
 		error = pdf_load_jpx_image(&tile, xref, dict);
 		if (error)
-			return fz_error_note(error, "cannot load jpx image");
+			return fz_error_note(ctx, error, "cannot load jpx image");
 		if (forcemask)
 		{
 			if (tile->n != 2)
 			{
 				fz_drop_pixmap(ctx, tile);
-				return fz_error_make("softmask must be grayscale");
+				return fz_error_make(ctx, "softmask must be grayscale");
 			}
 			mask = fz_alpha_from_gray(ctx, tile, 1);
 			fz_drop_pixmap(ctx, tile);
@@ -86,17 +86,17 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		bpc = 1;
 
 	if (w == 0)
-		return fz_error_make("image width is zero");
+		return fz_error_make(ctx, "image width is zero");
 	if (h == 0)
-		return fz_error_make("image height is zero");
+		return fz_error_make(ctx, "image height is zero");
 	if (bpc == 0)
-		return fz_error_make("image depth is zero");
+		return fz_error_make(ctx, "image depth is zero");
 	if (bpc > 16)
-		return fz_error_make("image depth is too large: %d", bpc);
+		return fz_error_make(ctx, "image depth is too large: %d", bpc);
 	if (w > (1 << 16))
-		return fz_error_make("image is too wide");
+		return fz_error_make(ctx, "image is too wide");
 	if (h > (1 << 16))
-		return fz_error_make("image is too high");
+		return fz_error_make(ctx, "image is too high");
 
 	obj = fz_dict_getsa(ctx, dict, "ColorSpace", "CS");
 	if (obj && !imagemask && !forcemask)
@@ -111,7 +111,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 
 		error = pdf_load_colorspace(&colorspace, xref, obj);
 		if (error)
-			return fz_error_note(error, "cannot load image colorspace");
+			return fz_error_note(ctx, error, "cannot load image colorspace");
 
 		if (!strcmp(colorspace->name, "Indexed"))
 			indexed = 1;
@@ -147,7 +147,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 			{
 				if (colorspace)
 					fz_drop_colorspace(ctx, colorspace);
-				return fz_error_note(error, "cannot load image mask/softmask");
+				return fz_error_note(ctx, error, "cannot load image mask/softmask");
 			}
 		}
 	}
@@ -166,7 +166,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 			fz_drop_colorspace(ctx, colorspace);
 		if (mask)
 			fz_drop_pixmap(ctx, mask);
-		return fz_error_make("out of memory");
+		return fz_error_make(ctx, "out of memory");
 	}
 
 	if (colorspace)
@@ -187,7 +187,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		if (error)
 		{
 			fz_drop_pixmap(ctx, tile);
-			return fz_error_note(error, "cannot open image data stream (%d 0 R)", fz_to_num(dict));
+			return fz_error_note(ctx, error, "cannot open image data stream (%d 0 R)", fz_to_num(dict));
 		}
 	}
 
@@ -199,7 +199,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		fz_close(stm);
 		fz_free(ctx, samples);
 		fz_drop_pixmap(ctx, tile);
-		return fz_error_note(len, "cannot read image data");
+		return fz_error_note(ctx, len, "cannot read image data");
 	}
 
 	/* Make sure we read the EOF marker (for inline images only) */
@@ -208,9 +208,9 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		unsigned char tbuf[512];
 		int tlen = fz_read(stm, tbuf, sizeof tbuf);
 		if (tlen < 0)
-			fz_error_handle(tlen, "ignoring error at end of image");
+			fz_error_handle(ctx, tlen, "ignoring error at end of image");
 		if (tlen > 0)
-			fz_warn("ignoring garbage at end of image");
+			fz_warn(ctx, "ignoring garbage at end of image");
 	}
 
 	fz_close(stm);
@@ -218,7 +218,7 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 	/* Pad truncated images */
 	if (len < stride * h)
 	{
-		fz_warn("padding truncated image (%d 0 R)", fz_to_num(dict));
+		fz_warn(ctx, "padding truncated image (%d 0 R)", fz_to_num(dict));
 		memset(samples + len, 0, stride * h - len);
 	}
 
@@ -263,7 +263,7 @@ pdf_load_inline_image(fz_pixmap **pixp, pdf_xref *xref, fz_obj *rdb, fz_obj *dic
 
 	error = pdf_load_image_imp(pixp, xref, rdb, dict, file, 0);
 	if (error)
-		return fz_error_note(error, "cannot load inline image");
+		return fz_error_note(xref->ctx, error, "cannot load inline image");
 
 	return fz_okay;
 }
@@ -298,14 +298,14 @@ pdf_load_jpx_image(fz_pixmap **imgp, pdf_xref *xref, fz_obj *dict)
 
 	error = pdf_load_stream(&buf, xref, fz_to_num(dict), fz_to_gen(dict));
 	if (error)
-		return fz_error_note(error, "cannot load jpx image data");
+		return fz_error_note(ctx, error, "cannot load jpx image data");
 
 	obj = fz_dict_gets(ctx, dict, "ColorSpace");
 	if (obj)
 	{
 		error = pdf_load_colorspace(&colorspace, xref, obj);
 		if (error)
-			fz_error_handle(error, "cannot load image colorspace");
+			fz_error_handle(ctx, error, "cannot load image colorspace");
 	}
 
 	error = fz_load_jpx_image(ctx, &img, buf->data, buf->len, colorspace);
@@ -314,7 +314,7 @@ pdf_load_jpx_image(fz_pixmap **imgp, pdf_xref *xref, fz_obj *dict)
 		if (colorspace)
 			fz_drop_colorspace(ctx, colorspace);
 		fz_drop_buffer(ctx, buf);
-		return fz_error_note(error, "cannot load jpx image");
+		return fz_error_note(ctx, error, "cannot load jpx image");
 	}
 
 	if (colorspace)
@@ -328,7 +328,7 @@ pdf_load_jpx_image(fz_pixmap **imgp, pdf_xref *xref, fz_obj *dict)
 		if (error)
 		{
 			fz_drop_pixmap(ctx, img);
-			return fz_error_note(error, "cannot load image mask/softmask");
+			return fz_error_note(ctx, error, "cannot load image mask/softmask");
 		}
 	}
 
@@ -350,7 +350,7 @@ pdf_load_image(fz_pixmap **pixp, pdf_xref *xref, fz_obj *dict)
 
 	error = pdf_load_image_imp(pixp, xref, NULL, dict, NULL, 0);
 	if (error)
-		return fz_error_note(error, "cannot load image (%d 0 R)", fz_to_num(dict));
+		return fz_error_note(ctx, error, "cannot load image (%d 0 R)", fz_to_num(dict));
 
 	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)fz_keep_pixmap, (pdf_store_drop_fn *)fz_drop_pixmap, dict, *pixp);
 

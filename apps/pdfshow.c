@@ -13,7 +13,7 @@ static int showcolumn;
 
 void die(fz_error error)
 {
-	fz_error_handle(error, "aborting");
+	fz_error_handle(ctx, error, "aborting");
 	if (xref)
 		pdf_free_xref(xref);
 	exit(1);
@@ -31,7 +31,7 @@ static void usage(void)
 static void showtrailer(void)
 {
 	if (!xref)
-		die(fz_error_make("no file specified"));
+		die(fz_error_make(ctx, "no file specified"));
 	printf("trailer\n");
 	fz_debug_obj(ctx, xref->trailer);
 	printf("\n");
@@ -40,7 +40,7 @@ static void showtrailer(void)
 static void showxref(void)
 {
 	if (!xref)
-		die(fz_error_make("no file specified"));
+		die(fz_error_make(ctx, "no file specified"));
 	pdf_debug_xref(xref);
 	printf("\n");
 }
@@ -53,13 +53,13 @@ static void showpagetree(void)
 	int i;
 
 	if (!xref)
-		die(fz_error_make("no file specified"));
+		die(fz_error_make(ctx, "no file specified"));
 
 	if (!xref->page_len)
 	{
 		error = pdf_load_page_tree(xref);
 		if (error)
-			die(fz_error_note(error, "cannot load page tree"));
+			die(fz_error_note(ctx, error, "cannot load page tree"));
 	}
 
 	count = pdf_count_pages(xref);
@@ -132,7 +132,7 @@ static void showobject(int num, int gen)
 	fz_obj *obj;
 
 	if (!xref)
-		die(fz_error_make("no file specified"));
+		die(fz_error_make(ctx, "no file specified"));
 
 	error = pdf_load_object(&obj, xref, num, gen);
 	if (error)
@@ -216,11 +216,11 @@ int main(int argc, char **argv)
 
 	ctx = fz_context_init(&fz_alloc_default);
 	if (ctx == NULL)
-		die(fz_error_note(1, "failed to initialise context"));
+		die(fz_error_note(ctx, 1, "failed to initialise context"));
 
 	error = pdf_open_xref(ctx, &xref, filename, password);
 	if (error)
-		die(fz_error_note(error, "cannot open document: %s", filename));
+		die(fz_error_note(ctx, error, "cannot open document: %s", filename));
 
 	if (fz_optind == argc)
 		showtrailer();
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
 
 	pdf_free_xref(xref);
 
-	fz_flush_warnings();
+	fz_flush_warnings(ctx);
 	fz_context_fin(ctx);
 
 	return 0;

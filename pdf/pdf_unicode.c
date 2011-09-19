@@ -19,7 +19,7 @@ pdf_load_to_unicode(pdf_font_desc *font, pdf_xref *xref,
 	{
 		error = pdf_load_embedded_cmap(&cmap, xref, cmapstm);
 		if (error)
-			return fz_error_note(error, "cannot load embedded cmap (%d %d R)", fz_to_num(cmapstm), fz_to_gen(cmapstm));
+			return fz_error_note(ctx, error, "cannot load embedded cmap (%d %d R)", fz_to_num(cmapstm), fz_to_gen(cmapstm));
 
 		font->to_unicode = pdf_new_cmap(ctx);
 
@@ -55,7 +55,7 @@ pdf_load_to_unicode(pdf_font_desc *font, pdf_xref *xref,
 			error = pdf_load_system_cmap(ctx, &font->to_unicode, "Adobe-Korea1-UCS2");
 
 		if (error)
-			return fz_error_note(error, "cannot load ToUnicode system cmap %s-UCS2", collection);
+			return fz_error_note(ctx, error, "cannot load ToUnicode system cmap %s-UCS2", collection);
 	}
 
 	if (strings)

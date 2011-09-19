@@ -154,7 +154,7 @@ read_predict(fz_stream *stm, unsigned char *buf, int len)
 	{
 		n = fz_read(state->chain, state->in, state->stride + ispng);
 		if (n < 0)
-			return fz_error_note(n, "read error in prediction filter");
+			return fz_error_note(stm->ctx, n, "read error in prediction filter");
 		if (n == 0)
 			return p - buf;
 
@@ -213,7 +213,7 @@ fz_open_predict(fz_stream *chain, fz_obj *params)
 		state->predictor != 12 && state->predictor != 13 &&
 		state->predictor != 14 && state->predictor != 15)
 	{
-		fz_warn("invalid predictor: %d", state->predictor);
+		fz_warn(ctx, "invalid predictor: %d", state->predictor);
 		state->predictor = 1;
 	}
 

@@ -50,7 +50,7 @@ pdf_load_type3_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *rdb, fz_o
 	encoding = fz_dict_gets(ctx, dict, "Encoding");
 	if (!encoding)
 	{
-		error = fz_error_make("syntaxerror: Type3 font missing Encoding");
+		error = fz_error_make(ctx, "syntaxerror: Type3 font missing Encoding");
 		goto cleanup;
 	}
 
@@ -99,7 +99,7 @@ pdf_load_type3_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *rdb, fz_o
 	widths = fz_dict_gets(ctx, dict, "Widths");
 	if (!widths)
 	{
-		error = fz_error_make("syntaxerror: Type3 font missing Widths");
+		error = fz_error_make(ctx, "syntaxerror: Type3 font missing Widths");
 		goto cleanup;
 	}
 
@@ -121,7 +121,7 @@ pdf_load_type3_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *rdb, fz_o
 	if (fontdesc->font->t3resources)
 		fz_keep_obj(fontdesc->font->t3resources);
 	if (!fontdesc->font->t3resources)
-		fz_warn("no resource dictionary for type 3 font!");
+		fz_warn(ctx, "no resource dictionary for type 3 font!");
 
 	fontdesc->font->t3xref = xref;
 	fontdesc->font->t3run = pdf_run_glyph_func;
@@ -131,7 +131,7 @@ pdf_load_type3_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *rdb, fz_o
 	charprocs = fz_dict_gets(ctx, dict, "CharProcs");
 	if (!charprocs)
 	{
-		error = fz_error_make("syntaxerror: Type3 font missing CharProcs");
+		error = fz_error_make(ctx, "syntaxerror: Type3 font missing CharProcs");
 		goto cleanup;
 	}
 
@@ -155,5 +155,5 @@ pdf_load_type3_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *rdb, fz_o
 cleanup:
 	fz_drop_font(ctx, fontdesc->font);
 	fz_free(ctx, fontdesc);
-	return fz_error_note(error, "cannot load type3 font (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
+	return fz_error_note(ctx, error, "cannot load type3 font (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 }

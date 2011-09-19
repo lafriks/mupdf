@@ -69,7 +69,7 @@ bezier(fz_gel *gel, fz_matrix *ctm, float flatness,
 }
 
 void
-fz_flatten_fill_path(fz_gel *gel, fz_path *path, fz_matrix ctm, float flatness)
+fz_flatten_fill_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_matrix ctm, float flatness)
 {
 	float x1, y1, x2, y2, x3, y3;
 	float cx = 0;
@@ -513,7 +513,7 @@ fz_stroke_bezier(struct sctx *s,
 }
 
 void
-fz_flatten_stroke_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth)
+fz_flatten_stroke_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth)
 {
 	struct sctx s;
 	fz_point p0, p1, p2, p3;
@@ -543,7 +543,7 @@ fz_flatten_stroke_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_m
 
 	if (path->len > 0 && path->items[0].k != FZ_MOVETO)
 	{
-		fz_warn("assert: path must begin with moveto");
+		fz_warn(ctx, "assert: path must begin with moveto");
 		return;
 	}
 
@@ -722,7 +722,7 @@ fz_dash_bezier(struct sctx *s,
 }
 
 void
-fz_flatten_dash_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth)
+fz_flatten_dash_path(fz_context *ctx, fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_matrix ctm, float flatness, float linewidth)
 {
 	struct sctx s;
 	fz_point p0, p1, p2, p3, beg;
@@ -751,7 +751,7 @@ fz_flatten_dash_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_mat
 
 	if (path->len > 0 && path->items[0].k != FZ_MOVETO)
 	{
-		fz_warn("assert: path must begin with moveto");
+		fz_warn(ctx, "assert: path must begin with moveto");
 		return;
 	}
 
@@ -760,7 +760,7 @@ fz_flatten_dash_path(fz_gel *gel, fz_path *path, fz_stroke_state *stroke, fz_mat
 		phase_len += stroke->dash_list[i];
 	if (phase_len < 0.01f || phase_len < stroke->linewidth * 0.5f)
 	{
-		fz_flatten_stroke_path(gel, path, stroke, ctm, flatness, linewidth);
+		fz_flatten_stroke_path(ctx, gel, path, stroke, ctm, flatness, linewidth);
 		return;
 	}
 
