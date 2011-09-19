@@ -67,6 +67,8 @@ typedef struct fz_except_context fz_except_context;
 typedef struct fz_alloc_context fz_alloc_context;
 typedef struct fz_context fz_context;
 
+typedef struct fz_font_context fz_font_context;
+
 /*
  * Variadic macros, inline and restrict keywords
  */
@@ -768,6 +770,9 @@ struct fz_font_s
 	int *width_table;
 };
 
+void fz_new_font_context(fz_context *ctx);
+void fz_free_font_context(fz_context *ctx);
+
 fz_font *fz_new_type3_font(fz_context *ctx, char *name, fz_matrix matrix);
 
 fz_error fz_new_font_from_memory(fz_context *ctx, fz_font **fontp, unsigned char *data, int len, int index);
@@ -1148,6 +1153,8 @@ struct fz_alloc_context
 
 extern fz_alloc_context fz_alloc_default;
 
+enum { FZ_ERR_LINE_LEN = 160, FZ_ERR_LINE_COUNT = 25 };
+
 /* Fitz context */
 
 struct fz_context
@@ -1155,6 +1162,15 @@ struct fz_context
 	fz_except_context *except;
 	fz_alloc_context *alloc;
 	fz_obj *(*fz_resolve_indirect)(fz_obj*);
+
+	/* Error/warning messages */
+    char warn_message[FZ_ERR_LINE_LEN];
+    int warn_count;
+    char error_message[FZ_ERR_LINE_COUNT][FZ_ERR_LINE_LEN];
+    int error_count;
+
+	/* Font context */
+	fz_font_context *ft;
 };
 
 fz_context *fz_context_init(fz_alloc_context *alloc);

@@ -4,7 +4,32 @@
 #include FT_FREETYPE_H
 #include FT_STROKER_H
 
-static void fz_finalize_freetype(void);
+static void fz_finalize_freetype(fz_context *);
+
+struct fz_font_context {
+    FT_Library ftlib;
+    int refs;
+};
+
+void
+fz_new_font_context(fz_context *ctx)
+{
+	fz_font_context *ft;
+
+	ft = fz_malloc(ctx, sizeof(fz_font_context));
+	ft->ftlib = NULL;
+	ft->refs = 0;
+	
+	ctx->ft = ft;
+}
+
+void
+fz_free_font_context(fz_context *ctx)
+{
+	fz_finalize_freetype(ctx);
+
+	fz_free(ctx, ctx->ft);
+}
 
 static fz_font *
 fz_new_font(fz_context *ctx, char *name)
@@ -78,7 +103,7 @@ fz_drop_font(fz_context *ctx, fz_font *font)
 			fterr = FT_Done_Face((FT_Face)font->ft_face);
 			if (fterr)
 				fz_warn("freetype finalizing face: %s", ft_error_string(fterr));
-			fz_finalize_freetype();
+			fz_finalize_freetype(ctx);
 		}
 
 		if (font->ft_file)
@@ -166,7 +191,7 @@ fz_init_freetype(void)
 }
 
 static void
-fz_finalize_freetype(void)
+fz_finalize_freetype(fz_context *ctx)
 {
 	int fterr;
 
