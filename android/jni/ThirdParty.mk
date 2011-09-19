@@ -9,7 +9,7 @@ LOCAL_C_INCLUDES := \
 	../thirdparty/openjpeg-1.4/libopenjpeg \
 	../thirdparty/jpeg-8c \
 	../thirdparty/zlib-1.2.5 \
-	../thirdparty/freetype-2.4.4/include \
+	../thirdparty/freetype-2.4.6/include \
 	../scripts
 
 LOCAL_CFLAGS := \
@@ -110,44 +110,44 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/thirdparty/zlib-1.2.5/trees.c \
 	$(MY_ROOT)/thirdparty/zlib-1.2.5/uncompr.c \
 	$(MY_ROOT)/thirdparty/zlib-1.2.5/zutil.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/autofit/autofit.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftbase.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftbbox.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftbdf.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftbitmap.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftdebug.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftgasp.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftglyph.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftgxval.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftinit.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftlcdfil.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftmm.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftotval.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftpfr.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftstroke.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftsynth.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftsystem.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/fttype1.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftwinfnt.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftxf86.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/base/ftpatent.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/bdf/bdf.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/cache/ftcache.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/cff/cff.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/cid/type1cid.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/gzip/ftgzip.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/lzw/ftlzw.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/pcf/pcf.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/pfr/pfr.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/psaux/psaux.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/pshinter/pshinter.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/psnames/psnames.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/raster/raster.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/smooth/smooth.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/sfnt/sfnt.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/truetype/truetype.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/type1/type1.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/type42/type42.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.4/src/winfonts/winfnt.c
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/autofit/autofit.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftbase.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftbbox.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftbdf.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftbitmap.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftdebug.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftgasp.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftglyph.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftgxval.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftinit.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftlcdfil.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftmm.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftotval.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftpfr.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftstroke.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftsynth.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftsystem.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/fttype1.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftwinfnt.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftxf86.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftpatent.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/bdf/bdf.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cache/ftcache.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cff/cff.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cid/type1cid.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/gzip/ftgzip.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/lzw/ftlzw.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/pcf/pcf.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/pfr/pfr.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/psaux/psaux.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/pshinter/pshinter.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/psnames/psnames.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/raster/raster.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/smooth/smooth.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/sfnt/sfnt.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/truetype/truetype.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/type1/type1.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/type42/type42.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/winfonts/winfnt.c
 
 include $(BUILD_STATIC_LIBRARY)

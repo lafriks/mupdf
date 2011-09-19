@@ -1,0 +1,201 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Memento|Win32">
+      <Configuration>Memento</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{5EDCF4FD-0291-4FB9-8D96-D58957CA5E3C}</ProjectGuid>
+    <RootNamespace>mupdf</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'">$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'">$(Configuration)\$(ProjectName)\</IntDir>
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H="slimftmodules.h";FT_CONFIG_OPTIONS_H="slimftoptions.h";DEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H="slimftmodules.h";FT_CONFIG_OPTIONS_H="slimftoptions.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Memento|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H="slimftmodules.h";FT_CONFIG_OPTIONS_H="slimftoptions.h";MEMENTO=1;DEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\thirdparty\jpeg-8c\jaricom.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jcomapi.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdapimin.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdapistd.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdarith.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdatadst.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdatasrc.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdcoefct.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdcolor.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jddctmgr.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdhuff.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdinput.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdmainct.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdmarker.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdmaster.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdmerge.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdpostct.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdsample.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jdtrans.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jerror.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jfdctflt.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jfdctfst.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jfdctint.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jidctflt.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jidctfst.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jidctint.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jmemansi.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jmemmgr.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jquant1.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jquant2.c" />
+    <ClCompile Include="..\thirdparty\jpeg-8c\jutils.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_arith.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_arith_iaid.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_arith_int.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_generic.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_huffman.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_image.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_metadata.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_mmr.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_page.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_refinement.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_segment.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_symbol_dict.c" />
+    <ClCompile Include="..\thirdparty\jbig2dec\jbig2_text.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\adler32.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\compress.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\crc32.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\deflate.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\inffast.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\inflate.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\inftrees.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\trees.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\uncompr.c" />
+    <ClCompile Include="..\thirdparty\zlib-1.2.5\zutil.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\bio.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\cio.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\dwt.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\event.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\image.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\j2k.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\j2k_lib.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\jp2.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\jpt.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\mct.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\mqc.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\openjpeg.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\pi.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\raw.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\t1.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\t2.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\tcd.c" />
+    <ClCompile Include="..\thirdparty\openjpeg-1.4\libopenjpeg\tgt.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\cff\cff.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\psaux\psaux.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\pshinter\pshinter.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\psnames\psnames.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\raster\raster.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\sfnt\sfnt.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\smooth\smooth.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\truetype\truetype.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\type1\type1.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\cid\type1cid.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftbase.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftbbox.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftbitmap.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftgasp.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftglyph.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftinit.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftstroke.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftsynth.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftsystem.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\fttype1.c" />
+    <ClCompile Include="..\thirdparty\freetype-2.4.6\src\base\ftxf86.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -39,7 +39,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.4\include"
+				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include"
 				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H=\&quot;slimftmodules.h\&quot;;FT_CONFIG_OPTIONS_H=\&quot;slimftoptions.h\&quot;;DEBUG=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -102,7 +102,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.4\include"
+				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include"
 				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H=\&quot;slimftmodules.h\&quot;;FT_CONFIG_OPTIONS_H=\&quot;slimftoptions.h\&quot;"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
@@ -162,7 +162,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.4\include"
+				AdditionalIncludeDirectories="..\scripts;..\thirdparty\jbig2dec;..\thirdparty\jpeg-8c;..\thirdparty\openjpeg-1.4\libopenjpeg;..\thirdparty\zlib-1.2.5;..\thirdparty\freetype-2.4.6\include"
 				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY;OPJ_STATIC;FT_CONFIG_MODULES_H=\&quot;slimftmodules.h\&quot;;FT_CONFIG_OPTIONS_H=\&quot;slimftoptions.h\&quot;;MEMENTO=1;DEBUG=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -514,90 +514,90 @@
 			Name="libfreetype"
 			>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\cff\cff.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\cff\cff.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\psaux\psaux.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\psaux\psaux.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\pshinter\pshinter.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\pshinter\pshinter.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\psnames\psnames.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\psnames\psnames.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\raster\raster.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\raster\raster.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\sfnt\sfnt.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\sfnt\sfnt.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\smooth\smooth.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\smooth\smooth.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\truetype\truetype.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\truetype\truetype.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\type1\type1.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\type1\type1.c"
 				>
 			</File>
 			<File
-				RelativePath="..\thirdparty\freetype-2.4.4\src\cid\type1cid.c"
+				RelativePath="..\thirdparty\freetype-2.4.6\src\cid\type1cid.c"
 				>
 			</File>
 			<Filter
 				Name="base"
 				>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftbase.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftbase.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftbbox.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftbbox.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftbitmap.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftbitmap.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftgasp.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftgasp.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftglyph.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftglyph.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftinit.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftinit.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftstroke.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftstroke.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftsynth.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftsynth.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftsystem.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftsystem.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\fttype1.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\fttype1.c"
 					>
 				</File>
 				<File
-					RelativePath="..\thirdparty\freetype-2.4.4\src\base\ftxf86.c"
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftxf86.c"
 					>
 				</File>
 			</Filter>
