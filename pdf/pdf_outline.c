@@ -6,36 +6,56 @@ pdf_load_outline_imp(pdf_xref *xref, fz_obj *dict)
 {
 	pdf_outline *node;
 	fz_obj *obj;
+	/* SumatraPDF: prevent potential stack overflow */
+	pdf_outline *prev, *root = NULL;
+	fz_obj *origDict = dict;
 	fz_context *ctx = xref->ctx;
 
 	if (fz_is_null(ctx, dict))
 		return NULL;
 
-	node = fz_malloc(ctx, sizeof(pdf_outline));
-	node->title = NULL;
-	node->link = NULL;
-	node->child = NULL;
-	node->next = NULL;
-	node->count = 0;
+	/* SumatraPDF: prevent cyclic outlines */
+	do
+	{
+		if (fz_dict_gets(ctx, dict, ".seen"))
+			break;
+		obj = fz_new_null(ctx);
+		fz_dict_puts(ctx, dict, ".seen", obj);
+		fz_drop_obj(ctx, obj);
+		node = fz_malloc(ctx, sizeof(pdf_outline));
+		node->title = NULL;
+		node->link = NULL;
+		node->child = NULL;
+		node->next = NULL;
+		node->count = 0;
 
-	obj = fz_dict_gets(ctx, dict, "Title");
-	if (obj)
-		node->title = pdf_to_utf8(ctx, obj);
+		obj = fz_dict_gets(ctx, dict, "Title");
+		if (obj)
+			node->title = pdf_to_utf8(ctx, obj);
 
-	obj = fz_dict_gets(ctx, dict, "Count");
-	if (obj)
-		node->count = fz_to_int(ctx, obj);
+		obj = fz_dict_gets(ctx, dict, "Count");
+		if (obj)
+			node->count = fz_to_int(ctx, obj);
 
-	if (fz_dict_gets(ctx, dict, "Dest") || fz_dict_gets(ctx, dict, "A"))
-		node->link = pdf_load_link(xref, dict);
+		if (fz_dict_gets(ctx, dict, "Dest") || fz_dict_gets(ctx, dict, "A"))
+			node->link = pdf_load_link(xref, dict);
 
-	obj = fz_dict_gets(ctx, dict, "First");
-	if (obj)
-		node->child = pdf_load_outline_imp(xref, obj);
+		obj = fz_dict_gets(ctx, dict, "First");
+		if (obj)
+			node->child = pdf_load_outline_imp(xref, obj);
 
-	obj = fz_dict_gets(ctx, dict, "Next");
-	if (obj)
-		node->next = pdf_load_outline_imp(xref, obj);
+		/* SumatraPDF: prevent potential stack overflow */
+		if (!root)
+			prev = root = node;
+		else
+			prev = prev->next = node;
+	
+		dict = fz_dict_gets(ctx, dict, "Next");
+	} while (dict && !fz_is_null(ctx, dict));
+	node = root;
+	/* SumatraPDF: prevent cyclic outlines */
+	for (dict = origDict; dict && fz_dict_gets(ctx, dict, ".seen"); dict = fz_dict_gets(ctx, dict, "Next"))
+		fz_dict_dels(ctx, dict, ".seen");
 
 	return node;
 }

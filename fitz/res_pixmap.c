@@ -34,6 +34,8 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 	}
 	else
 	{
+		/* SumatraPDF: abort on integer overflow */
+		if (pix->w > INT_MAX / pix->n) abort();
 		fz_memory_used += pix->w * pix->h * pix->n;
 		pix->samples = fz_calloc(ctx, pix->h, pix->w * pix->n);
 		pix->free_samples = 1;
@@ -47,7 +49,7 @@ fz_new_pixmap_with_limit(fz_context *ctx, fz_colorspace *colorspace, int w, int 
 {
 	int n = colorspace ? colorspace->n + 1 : 1;
 	int size = w * h * n;
-	if (fz_memory_used + size > fz_memory_limit)
+	if (fz_memory_used + size > fz_memory_limit || h != 0 && INT_MAX / h / n < w)
 	{
 		fz_warn(ctx, "pixmap memory exceeds soft limit %dM + %dM > %dM",
 			fz_memory_used/(1<<20), size/(1<<20), fz_memory_limit/(1<<20));

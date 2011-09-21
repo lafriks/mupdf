@@ -275,7 +275,8 @@ fz_draw_stroke_path(fz_device *devp, fz_path *path, fz_stroke_state *stroke, fz_
 		linewidth = 1 / expansion;
 
 	fz_reset_gel(dev->gel, dev->scissor);
-	if (stroke->dash_len > 0)
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692356 */
+	if (stroke->dash_len > 0 && (stroke->dash_len != 2 || stroke->dash_list[1] != 0))
 		fz_flatten_dash_path(dev->ctx, dev->gel, path, stroke, ctm, flatness, linewidth);
 	else
 		fz_flatten_stroke_path(dev->ctx, dev->gel, path, stroke, ctm, flatness, linewidth);
@@ -1437,7 +1438,19 @@ fz_draw_begin_tile(fz_device *devp, fz_rect area, fz_rect view, float xstep, flo
 		fz_knockout_begin(dev);
 
 	bbox = fz_round_rect(fz_transform_rect(ctm, view));
-	dest = fz_new_pixmap_with_rect(dev->ctx, model, bbox);
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692418 */
+	dest = fz_new_pixmap_with_limit(dev->ctx, model, bbox.x1 - bbox.x0, bbox.y1 - bbox.y0);
+	if (dest)
+	{
+		dest->x = bbox.x0;
+		dest->y = bbox.y0;
+	}
+	else
+	{
+		bbox.x1 = bbox.x0;
+		bbox.y1 = bbox.y0;
+		dest = fz_new_pixmap_with_rect(dev->ctx, model, bbox);
+	}
 	/* FIXME: See note #1 */
 	fz_clear_pixmap(dest);
 

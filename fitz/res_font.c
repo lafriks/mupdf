@@ -201,6 +201,24 @@ fz_finalize_freetype(fz_context *ctx)
 	}
 }
 
+/* SumatraPDF: some Chinese fonts seem to wrongly use pre-devided units */
+static void
+fz_check_font_dimensions(FT_Face face)
+{
+	/* prevent broken fonts from causing a division by zero */
+	if (face->units_per_EM == 0)
+		face->units_per_EM = 1000;
+
+	if (face->bbox.xMin == 0 && face->bbox.yMin == 0 &&
+		face->bbox.xMax == 1 && face->bbox.yMax == 1 &&
+		face->ascender == 1 && face->descender == 0)
+	{
+		face->bbox.xMax = face->units_per_EM;
+		face->bbox.yMax = face->units_per_EM;
+		face->ascender = face->units_per_EM;
+	}
+}
+
 fz_error
 fz_new_font_from_file(fz_context *ctx, fz_font **fontp, char *path, int index)
 {
@@ -216,6 +234,7 @@ fz_new_font_from_file(fz_context *ctx, fz_font **fontp, char *path, int index)
 	fterr = FT_New_Face(ctx->ft->ftlib, path, index, &face);
 	if (fterr)
 		return fz_error_make(ctx, "freetype: cannot load font: %s", ft_error_string(fterr));
+	fz_check_font_dimensions(face);
 
 	font = fz_new_font(ctx, face->family_name);
 	font->ft_face = face;
@@ -243,6 +262,7 @@ fz_new_font_from_memory(fz_context *ctx, fz_font **fontp, unsigned char *data, i
 	fterr = FT_New_Memory_Face(ctx->ft->ftlib, data, len, index, &face);
 	if (fterr)
 		return fz_error_make(ctx, "freetype: cannot load font: %s", ft_error_string(fterr));
+	fz_check_font_dimensions(face);
 
 	font = fz_new_font(ctx, face->family_name);
 	font->ft_face = face;

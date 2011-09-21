@@ -382,6 +382,7 @@ pdf_token_from_keyword(char *key)
 fz_error
 pdf_lex(int *tok, fz_stream *f, char *buf, int n, int *sl)
 {
+restart_after_lexical_error: /* SumatraPDF: don't fail on unmatched closing parentheses */
 	while (1)
 	{
 		int c = fz_read_byte(f);
@@ -457,5 +458,7 @@ pdf_lex(int *tok, fz_stream *f, char *buf, int n, int *sl)
 
 cleanuperror:
 	*tok = PDF_TOK_ERROR;
-	return fz_error_make(f->ctx, "lexical error");
+	/* SumatraPDF: don't fail on unmatched closing parentheses */
+	fz_warn(f->ctx, "ignoring unexpected closing parenthesis (lexical error)");
+	goto restart_after_lexical_error;
 }

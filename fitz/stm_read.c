@@ -94,8 +94,9 @@ fz_fill_buffer(fz_stream *stm)
 	}
 }
 
+/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692260 */
 fz_error
-fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial)
+fz_read_all2(fz_buffer **bufp, fz_stream *stm, int initial, int fail_on_error)
 {
 	fz_buffer *buf;
 	int n;
@@ -118,11 +119,13 @@ fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial)
 		}
 
 		n = fz_read(stm, buf->data + buf->len, buf->cap - buf->len);
-		if (n < 0)
+		if (n < 0 && (fail_on_error || buf->len == 0))
 		{
 			fz_drop_buffer(ctx, buf);
 			return fz_error_note(ctx, n, "read error");
 		}
+		if (n < 0)
+			fz_error_handle(ctx, n, "capping stream at read error");
 		if (n == 0)
 			break;
 
@@ -131,6 +134,12 @@ fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial)
 
 	*bufp = buf;
 	return fz_okay;
+}
+
+fz_error
+fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial)
+{
+	return fz_read_all2(bufp, stm, initial, 1);
 }
 
 void

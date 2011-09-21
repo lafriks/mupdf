@@ -154,6 +154,16 @@ fz_append_display_node(fz_display_list *list, fz_display_node *node)
 			update = list->stack[list->top].update;
 			if (list->tiled == 0)
 			{
+				/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692346 */
+				if (!fz_is_infinite_rect(list->stack[list->top].rect))
+				{
+					/* add some fuzz at the edges, as especially glyph rects
+					 * are sometimes not actually completely bounding the glyph */
+					list->stack[list->top].rect.x0 -= 20;
+					list->stack[list->top].rect.y0 -= 20;
+					list->stack[list->top].rect.x1 += 20;
+					list->stack[list->top].rect.y1 += 20;
+				}
 				if (update != NULL)
 				{
 					*update = fz_intersect_rect(*update, list->stack[list->top].rect);
@@ -543,12 +553,16 @@ fz_execute_display_list(fz_display_list *list, fz_device *dev, fz_matrix top_ctm
 			{
 			case FZ_CMD_CLIP_PATH:
 			case FZ_CMD_CLIP_STROKE_PATH:
-			case FZ_CMD_CLIP_TEXT:
 			case FZ_CMD_CLIP_STROKE_TEXT:
 			case FZ_CMD_CLIP_IMAGE_MASK:
 			case FZ_CMD_BEGIN_MASK:
 			case FZ_CMD_BEGIN_GROUP:
 				clipped++;
+				continue;
+			/* SumatraPDF: accumulated text clipping is only matched by a single pop */
+			case FZ_CMD_CLIP_TEXT:
+				if (node->flag != 2)
+					clipped++;
 				continue;
 			case FZ_CMD_POP_CLIP:
 			case FZ_CMD_END_GROUP:
@@ -657,4 +671,11 @@ visible:
 			break;
 		}
 	}
+}
+
+/* SumatraPDF: allow to optimize handling of single-image pages */
+int
+fz_list_is_single_image(fz_display_list *list)
+{
+	return list->first && !list->first->next && list->first->cmd == FZ_CMD_FILL_IMAGE;
 }

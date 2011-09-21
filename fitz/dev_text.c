@@ -214,6 +214,190 @@ fz_debug_text_span(fz_text_span *span)
 		fz_debug_text_span(span->next);
 }
 
+/***** SumatraPDF: various string fixups *****/
+static void
+ensurespanlength(fz_context *ctx, fz_text_span *span, int mincap)
+{
+	if (span->cap < mincap)
+	{
+		span->cap = mincap * 3 / 2;
+		span->text = fz_realloc(ctx, span->text, span->cap * sizeof(fz_text_char));
+	}
+}
+
+static void
+mergetwospans(fz_context *ctx, fz_text_span *span)
+{
+	if (!span->next || span->font != span->next->font || span->size != span->next->size || span->wmode != span->next->wmode)
+		return;
+
+	ensurespanlength(ctx, span, span->len + span->next->len);
+	memcpy(&span->text[span->len], &span->next->text[0], span->next->len * sizeof(fz_text_char));
+	span->len += span->next->len;
+	span->next->len = 0;
+
+	if (span->next->next)
+	{
+		fz_text_span *newNext = span->next->next;
+		span->eol = span->next->eol;
+		span->next->next = NULL;
+		fz_free_text_span(ctx, span->next);
+		span->next = newNext;
+	}
+}
+
+static void
+deletecharacter(fz_text_span *span, int i)
+{
+	memmove(&span->text[i], &span->text[i + 1], (span->len - (i + 1)) * sizeof(fz_text_char));
+	span->len--;
+}
+
+static void
+reversecharacters(fz_text_span *span, int i, int j)
+{
+	while (i < j)
+	{
+		fz_text_char tc = span->text[i];
+		span->text[i] = span->text[j];
+		span->text[j] = tc;
+		i++; j--;
+	}
+}
+
+static int
+ornatecharacter(int ornate, int character)
+{
+	static wchar_t *ornates[] = {
+		L" \xA8\xB4`^\u02DA",
+		L"a\xE4\xE1\xE0\xE2\xE5", L"A\xC4\xC1\xC0\xC2\0",
+		L"e\xEB\xE9\xE8\xEA\0", L"E\xCB\xC9\xC8\xCA\0",
+		L"i\xEF\xED\xEC\xEE\0", L"I\xCF\xCD\xCC\xCE\0",
+		L"o\xF6\xF3\xF2\xF4\0", L"O\xD6\xD3\xD2\xD4\0",
+		L"u\xFC\xFA\xF9\xFB\0", L"U\xDC\xDA\xD9\xDB\0",
+		NULL
+	};
+	int i, j;
+
+	for (i = 1; ornates[0][i] && ornates[0][i] != (wchar_t)ornate; i++);
+	for (j = 1; ornates[j] && ornates[j][0] != (wchar_t)character; j++);
+	return ornates[0][i] && ornates[j] ? ornates[j][i] : 0;
+}
+
+static float
+calcbboxoverlap(fz_bbox bbox1, fz_bbox bbox2)
+{
+	fz_bbox intersect = fz_intersect_bbox(bbox1, bbox2);
+	int area1, area2, area3;
+
+	if (fz_is_empty_rect(intersect))
+		return 0;
+
+	area1 = (bbox1.x1 - bbox1.x0) * (bbox1.y1 - bbox1.y0);
+	area2 = (bbox2.x1 - bbox2.x0) * (bbox2.y1 - bbox2.y0);
+	area3 = (intersect.x1 - intersect.x0) * (intersect.y1 - intersect.y0);
+
+	return 1.0 * area3 / MAX(area1, area2);
+}
+
+static int
+doglyphsoverlap(fz_text_span *span, int i, fz_text_span *span2, int j)
+{
+	return
+		i < span->len && j < span2->len && span->text[i].c == span2->text[j].c &&
+		(calcbboxoverlap(span->text[i].bbox, span2->text[j].bbox) > 0.7f ||
+		 // bboxes of slim glyphs sometimes don't overlap enough, so
+		 // check if the overlapping continues with the following glyph
+		 i + 1 < span->len && j + 1 < span2->len && span->text[i + 1].c == span2->text[j + 1].c &&
+		 calcbboxoverlap(span->text[i + 1].bbox, span2->text[j + 1].bbox) > 0.7f);
+}
+
+/* TODO: Complete these lists... */
+#define ISLEFTTORIGHTCHAR(c) ((0x0041 <= (c) && (c) <= 0x005A) || (0x0061 <= (c) && (c) <= 0x007A) || (0xFB00 <= (c) && (c) <= 0xFB06))
+#define ISRIGHTTOLEFTCHAR(c) ((0x0590 <= (c) && (c) <= 0x05FF) || (0x0600 <= (c) && (c) <= 0x06FF) || (0x0750 <= (c) && (c) <= 0x077F) || (0xFB50 <= (c) && (c) <= 0xFDFF) || (0xFE70 <= (c) && (c) <= 0xFEFF))
+
+static void
+fixuptextspan(fz_context *ctx, fz_text_span *head)
+{
+	fz_text_span *span;
+	int i;
+
+	for (span = head; span; span = span->next)
+	{
+		for (i = 0; i < span->len; i++)
+		{
+			switch (span->text[i].c)
+			{
+			/* recombine characters and their accents */
+			case 0x00A8: /* ¨ */
+			case 0x00B4: /* ´ */
+			case 0x0060: /* ` */
+			case 0x005E: /* ^ */
+			case 0x02DA: /* ° */
+				if (span->next && span->next->len > 0 && (i + 1 == span->len || i + 2 == span->len && span->text[i + 1].c == 32))
+				{
+					mergetwospans(ctx, span);
+				}
+				if (i + 1 < span->len)
+				{
+					int newC = 0;
+					if (span->text[i + 1].c != 32 || i + 2 >= span->len)
+						newC = ornatecharacter(span->text[i].c, span->text[i + 1].c);
+					else if ((newC = ornatecharacter(span->text[i].c, span->text[i + 2].c)))
+						deletecharacter(span, i + 1);
+					if (newC)
+					{
+						deletecharacter(span, i);
+						span->text[i].c = newC;
+					}
+				}
+				break;
+			default:
+				/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=733 */
+				/* reverse words written in RTL languages */
+				if (ISRIGHTTOLEFTCHAR(span->text[i].c))
+				{
+					int j = i + 1;
+					while (j < span->len && span->text[j - 1].bbox.x0 <= span->text[j].bbox.x0 && !ISLEFTTORIGHTCHAR(span->text[i].c))
+						j++;
+					reversecharacters(span, i, j - 1);
+					i = j;
+				}
+			}
+		}
+	}
+
+	/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=734 */
+	/* remove duplicate character sequences in (almost) the same spot */
+	for (span = head; span; span = span->next)
+	{
+		if (span->size < 5) /* doglyphsoverlap fails too often for small fonts */
+			continue;
+		for (i = 0; i < span->len; i++)
+		{
+			fz_text_span *span2;
+			int newlines, j;
+			for (span2 = span, j = i + 1, newlines = 0; span2 && newlines < 2; newlines += span2->eol, span2 = span2->next, j = 0)
+				for (; j < span2->len; j++)
+					if (span->text[i].c != 32 && doglyphsoverlap(span, i, span2, j))
+						goto fixup_delete_duplicates;
+			continue;
+
+fixup_delete_duplicates:
+			do
+				deletecharacter(span, i);
+			while (doglyphsoverlap(span, i, span2, ++j));
+
+			if (i < span->len && span->text[i].c == 32)
+				deletecharacter(span, i);
+			else if (i == span->len && span->eol)
+				span->eol = 0;
+			i--;
+		}
+	}
+}
+/***** various string fixups *****/
+
 static void
 fz_text_extract_span(fz_context *ctx, fz_text_span **last, fz_text *text, fz_matrix ctm, fz_point *pen)
 {
@@ -398,6 +582,7 @@ fz_text_free_user(fz_device *dev)
 
 	/* TODO: unicode NFC normalization */
 	/* TODO: bidi logical reordering */
+	fixuptextspan(dev->ctx, tdev->head);
 
 	fz_free(dev->ctx, tdev);
 }

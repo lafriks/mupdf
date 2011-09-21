@@ -66,6 +66,7 @@ pdf_repair_obj(fz_stream *file, char *buf, int cap, int *stmofsp, int *stmlenp, 
 		fz_drop_obj(ctx, dict);
 	}
 
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692424
 	while ( tok != PDF_TOK_STREAM &&
 		tok != PDF_TOK_ENDOBJ &&
 		tok != PDF_TOK_ERROR &&
@@ -75,7 +76,16 @@ pdf_repair_obj(fz_stream *file, char *buf, int cap, int *stmofsp, int *stmlenp, 
 		if (error)
 			return fz_error_note(ctx, error, "cannot scan for endobj or stream token");
 	}
-
+	*/
+	error = pdf_lex(&tok, file, buf, cap, &len);
+	if (error)
+		return fz_error_note(ctx, error, "cannot scan for endobj or stream token");
+	if (tok != PDF_TOK_STREAM && tok != PDF_TOK_ENDOBJ && tok != PDF_TOK_ERROR && tok != PDF_TOK_EOF)
+	{
+		while (len-- > 0)
+			fz_unread_byte(file);
+	}
+	else
 	if (tok == PDF_TOK_STREAM)
 	{
 		int c = fz_read_byte(file);
@@ -165,6 +175,9 @@ pdf_repair_obj_stm(pdf_xref *xref, int num, int gen)
 		xref->table[n].ofs = num;
 		xref->table[n].gen = i;
 		xref->table[n].stm_ofs = 0;
+		/* SumatraPDF: fix memory leak */
+		if (xref->table[n].obj)
+			fz_drop_obj(ctx, xref->table[n].obj);
 		xref->table[n].obj = NULL;
 		xref->table[n].type = 'o';
 
@@ -267,6 +280,12 @@ pdf_repair_xref(pdf_xref *xref, char *buf, int bufsize)
 			if (error)
 			{
 				error = fz_error_note(ctx, error, "cannot parse object (%d %d R)", num, gen);
+				/* SumatraPDF: if we've seen a root, try to do with what we've got */
+				if (root)
+				{
+					fz_error_handle(ctx, error, "ignoring the rest of the file");
+					break;
+				}
 				goto cleanup;
 			}
 
@@ -294,6 +313,12 @@ pdf_repair_xref(pdf_xref *xref, char *buf, int bufsize)
 			if (error)
 			{
 				error = fz_error_note(ctx, error, "cannot parse object");
+				/* SumatraPDF: if we've seen a root, try to do with what we've got */
+				if (root)
+				{
+					fz_error_handle(ctx, error, "ignoring the rest of the file");
+					break;
+				}
 				goto cleanup;
 			}
 
@@ -462,6 +487,11 @@ pdf_repair_obj_stms(pdf_xref *xref)
 			fz_drop_obj(ctx, dict);
 		}
 	}
+
+	/* SumatraPDF: ensure that streamed objects reside insided a known non-streamed object */
+	for (i = 0; i < xref->len; i++)
+		if (xref->table[i].type == 'o' && xref->table[xref->table[i].ofs].type != 'n')
+			return fz_error_make(xref->ctx, "invalid reference to non-object-stream: %d (%d 0 R)", xref->table[i].ofs, i);
 
 	return fz_okay;
 }

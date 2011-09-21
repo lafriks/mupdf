@@ -500,6 +500,8 @@ void fz_seek(fz_stream *stm, int offset, int whence);
 int fz_read(fz_stream *stm, unsigned char *buf, int len);
 void fz_read_line(fz_stream *stm, char *buf, int max);
 fz_error fz_read_all(fz_buffer **bufp, fz_stream *stm, int initial);
+/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692260 */
+fz_error fz_read_all2(fz_buffer **bufp, fz_stream *stm, int initial, int fail_on_error);
 
 static inline int fz_read_byte(fz_stream *stm)
 {
@@ -1085,6 +1087,8 @@ fz_display_list *fz_new_display_list(fz_context *ctx);
 void fz_free_display_list(fz_context *ctx, fz_display_list *list);
 fz_device *fz_new_list_device(fz_context *ctx, fz_display_list *list);
 void fz_execute_display_list(fz_display_list *list, fz_device *dev, fz_matrix ctm, fz_bbox area);
+/* SumatraPDF: allow to optimize handling of single-image pages */
+int fz_list_is_single_image(fz_display_list *list);
 
 /*
  * Plotting functions.

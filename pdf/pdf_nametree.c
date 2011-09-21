@@ -24,8 +24,18 @@ pdf_lookup_name_imp(fz_context *ctx, fz_obj *node, fz_obj *needle)
 				r = m - 1;
 			else if (fz_objcmp(needle, last) > 0)
 				l = m + 1;
+			/* SumatraPDF: prevent a cycle */
+			else if (fz_dict_gets(ctx, node, ".seen"))
+				break;
 			else
-			return pdf_lookup_name_imp(ctx, kid, needle);
+			{
+				fz_obj *obj, *tmp = fz_new_null(ctx);
+				fz_dict_puts(ctx, node, ".seen", tmp);
+				fz_drop_obj(ctx, tmp);
+				obj = pdf_lookup_name_imp(ctx, kid, needle);
+				fz_dict_dels(ctx, node, ".seen");
+				return obj;
+			}
 		}
 	}
 
@@ -49,6 +59,11 @@ pdf_lookup_name_imp(fz_context *ctx, fz_obj *node, fz_obj *needle)
 			else
 				return val;
 		}
+
+		/* SumatraPDF: Adobe Reader seems to handle unsorted /Names, as long as the /Limits are correct */
+		for (l = 0; l < fz_array_len(ctx, names) / 2; l++)
+			if (!fz_objcmp(needle, fz_array_get(ctx, names, l * 2)))
+				return fz_array_get(ctx, names, l * 2 + 1);
 	}
 
 	return NULL;
@@ -102,10 +117,16 @@ pdf_load_name_tree_imp(fz_obj *dict, pdf_xref *xref, fz_obj *node)
 	fz_obj *names = fz_dict_gets(ctx, node, "Names");
 	int i;
 
-	if (kids)
+	/* SumatraPDF: prevent a cycle */
+	if (kids && !fz_dict_gets(ctx, node, ".seen"))
 	{
+		fz_obj *tmp = fz_new_null(ctx);
+		fz_dict_puts(ctx, node, ".seen", tmp);
+		fz_drop_obj(ctx, tmp);
+
 		for (i = 0; i < fz_array_len(ctx, kids); i++)
 			pdf_load_name_tree_imp(dict, xref, fz_array_get(ctx, kids, i));
+		fz_dict_dels(ctx, node, ".seen");
 	}
 
 	if (names)

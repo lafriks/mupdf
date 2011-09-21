@@ -68,7 +68,8 @@ pdf_load_page_tree_node(pdf_xref *xref, fz_obj *node, struct info info)
 
 		fz_dict_dels(ctx, node, ".seen");
 	}
-	else
+	/* SumatraPDF: fix a potential NULL pointer dereference */
+	else if (fz_is_dict(ctx, node))
 	{
 		dict = fz_resolve_indirect(ctx, node);
 

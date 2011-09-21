@@ -118,6 +118,7 @@
     <ClInclude Include="..\fitz\exceptxxx.h" />
     <ClInclude Include="..\fitz\fitz.h" />
     <ClInclude Include="..\fitz\memento.h" />
+    <ClInclude Include="..\xps\muxps.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\pdf\pdf_annot.c" />
@@ -206,6 +207,7 @@
     <ClCompile Include="..\xps\xps_gradient.c" />
     <ClCompile Include="..\xps\xps_image.c" />
     <ClCompile Include="..\xps\xps_jpeg.c" />
+    <ClCompile Include="..\xps\xps_outline.c" />
     <ClCompile Include="..\xps\xps_path.c" />
     <ClCompile Include="..\xps\xps_png.c" />
     <ClCompile Include="..\xps\xps_resource.c" />

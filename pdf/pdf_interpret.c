@@ -79,9 +79,12 @@ struct pdf_csi_s
 
 	int xbalance;
 	int in_text;
+	int in_hidden_ocg; /* SumatraPDF: support inline OCGs */
 
 	/* path object state */
 	fz_path *path;
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
+	int clip; /* 0: none, 1: winding, 2: even-odd */
 
 	/* text object state */
 	fz_text *text;
@@ -92,7 +95,9 @@ struct pdf_csi_s
 
 	/* graphics state */
 	fz_matrix top_ctm;
-	pdf_gstate gstate[64];
+	/* SumatraPDF: make gstate growable for rendering tikz-qtree documents */
+	pdf_gstate *gstate;
+	int gcap;
 	int gtop;
 };
 
@@ -100,6 +105,49 @@ static fz_error pdf_run_buffer(pdf_csi *csi, fz_obj *rdb, fz_buffer *contents);
 static fz_error pdf_run_xobject(pdf_csi *csi, fz_obj *resources, pdf_xobject *xobj, fz_matrix transform);
 static void pdf_show_pattern(pdf_csi *csi, pdf_pattern *pat, fz_rect area, int what);
 
+/* SumatraPDF: support inline OCGs */
+static int
+fz_is_in_array(fz_context *ctx, fz_obj *arr, fz_obj *obj)
+{
+	int i;
+
+	for (i = 0; i < fz_array_len(ctx, arr); i++)
+		if (!fz_objcmp(fz_array_get(ctx, arr, i), obj))
+			return 1;
+
+	return 0;
+}
+static int
+pdf_is_ocg_hidden(fz_obj *ocg, pdf_xref *xref, char *target)
+{
+	char target_state[16];
+	fz_obj *obj;
+	int defaultOff;
+	fz_context *ctx = xref->ctx;
+
+	fz_strlcpy(target_state, target, sizeof target_state);
+	fz_strlcat(target_state, "State", sizeof target_state);
+
+	obj = fz_dict_gets(ctx, ocg, "Usage");
+	obj = fz_dict_gets(ctx, obj, target);
+	obj = fz_dict_gets(ctx, obj, target_state);
+	if (!strcmp(fz_to_name(ctx, obj), "OFF"))
+		return 1;
+
+	obj = fz_dict_gets(ctx, ocg, "Intent");
+	if (fz_is_name(ctx, obj) && strcmp(fz_to_name(ctx, obj), "View") != 0)
+		return 1;
+
+	obj = fz_dict_gets(ctx, xref->trailer, "Root");
+	obj = fz_dict_gets(ctx, obj, "OCProperties");
+	obj = fz_dict_gets(ctx, obj, "D");
+	defaultOff = !strcmp(fz_to_name(ctx, fz_dict_gets(ctx, obj, "BaseState")), "OFF");
+	obj = fz_dict_gets(ctx, obj, defaultOff ? "ON" : "OFF");
+	if (fz_is_array(ctx, obj))
+		return !fz_is_in_array(ctx, obj, ocg) == defaultOff;
+
+	return 0;
+}
 
 static int
 pdf_is_hidden_ocg(fz_context *ctx, fz_obj *xobj, char *target)
@@ -172,6 +220,10 @@ pdf_show_shade(pdf_csi *csi, fz_shade *shd)
 	pdf_gstate *gstate = csi->gstate + csi->gtop;
 	fz_rect bbox;
 
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		return;
+
 	bbox = fz_bound_shade(shd, gstate->ctm);
 
 	pdf_begin_group(csi, bbox);
@@ -186,6 +238,10 @@ pdf_show_image(pdf_csi *csi, fz_pixmap *image)
 {
 	pdf_gstate *gstate = csi->gstate + csi->gtop;
 	fz_rect bbox;
+
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		return;
 
 	bbox = fz_transform_rect(gstate->ctm, fz_unit_rect);
 
@@ -269,6 +325,17 @@ pdf_show_path(pdf_csi *csi, int doclose, int dofill, int dostroke, int even_odd)
 		bbox = fz_bound_path(path, &gstate->stroke_state, gstate->ctm);
 	else
 		bbox = fz_bound_path(path, NULL, gstate->ctm);
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
+	if (csi->clip)
+	{
+		gstate->clip_depth++;
+		fz_clip_path(csi->dev, path, NULL, csi->clip == 2, gstate->ctm);
+		csi->clip = 0;
+	}
+
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		dofill = dostroke = 0;
 
 	if (dofill || dostroke)
 		pdf_begin_group(csi, bbox);
@@ -370,6 +437,10 @@ pdf_flush_text(pdf_csi *csi)
 	case 6: dofill = dostroke = doclip = 1; break;
 	case 7: doclip = 1; break;
 	}
+
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		dofill = dostroke = 0;
 
 	bbox = fz_bound_text(text, gstate->ctm);
 
@@ -679,14 +750,20 @@ pdf_new_csi(pdf_xref *xref, fz_device *dev, fz_matrix ctm, char *target)
 
 	csi->xbalance = 0;
 	csi->in_text = 0;
+	csi->in_hidden_ocg = 0; /* SumatraPDF: support inline OCGs */
 
 	csi->path = fz_new_path(dev->ctx);
+	csi->clip = 0; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
 
 	csi->text = NULL;
 	csi->tlm = fz_identity;
 	csi->tm = fz_identity;
 	csi->text_mode = 0;
 	csi->accumulate = 1;
+
+	/* SumatraPDF: make gstate growable for rendering tikz-qtree documents */
+	csi->gcap = 32;
+	csi->gstate = fz_calloc(dev->ctx, csi->gcap, sizeof(pdf_gstate));
 
 	csi->top_ctm = ctm;
 	pdf_init_gstate(&csi->gstate[0], ctm);
@@ -741,10 +818,13 @@ pdf_gsave(pdf_csi *csi)
 {
 	pdf_gstate *gs = csi->gstate + csi->gtop;
 
-	if (csi->gtop == nelem(csi->gstate) - 1)
+	/* SumatraPDF: make gstate growable for rendering tikz-qtree documents */
+	if (csi->gtop == csi->gcap - 1)
 	{
 		fz_warn(csi->dev->ctx, "gstate overflow in content stream");
-		return;
+		csi->gcap *= 2;
+		csi->gstate = fz_realloc(csi->xref->ctx, csi->gstate, csi->gcap * sizeof(pdf_gstate));
+		gs = csi->gstate + csi->gtop;
 	}
 
 	memcpy(&csi->gstate[csi->gtop + 1], &csi->gstate[csi->gtop], sizeof(pdf_gstate));
@@ -811,6 +891,8 @@ pdf_free_csi(pdf_csi *csi)
 	if (csi->text) fz_free_text(ctx, csi->text);
 
 	pdf_clear_stack(csi);
+	/* SumatraPDF: make gstate growable for rendering tikz-qtree documents */
+	fz_free(ctx, csi->gstate);
 
 	fz_free(ctx, csi);
 }
@@ -1043,6 +1125,10 @@ pdf_run_xobject(pdf_csi *csi, fz_obj *resources, pdf_xobject *xobj, fz_matrix tr
 	int popmask;
 	fz_context *ctx = csi->dev->ctx;
 
+	/* SumatraPDF: prevent a potentially infinite recursion */
+	if (csi->gtop >= 96)
+		return fz_error_make(ctx, "aborting potentially infinite recursion (csi->gtop == %d)", csi->gtop);
+
 	pdf_gsave(csi);
 
 	gstate = csi->gstate + csi->gtop;
@@ -1090,7 +1176,8 @@ pdf_run_xobject(pdf_csi *csi, fz_obj *resources, pdf_xobject *xobj, fz_matrix tr
 	fz_lineto(ctx, csi->path, xobj->bbox.x1, xobj->bbox.y1);
 	fz_lineto(ctx, csi->path, xobj->bbox.x0, xobj->bbox.y1);
 	fz_closepath(ctx, csi->path);
-	pdf_show_clip(csi, 0);
+	//pdf_show_clip(csi, 0);
+	csi->clip = 1; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
 	pdf_show_path(csi, 0, 0, 0, 0);
 
 	/* run contents */
@@ -1272,8 +1359,19 @@ pdf_run_extgstate(pdf_csi *csi, fz_obj *rdb, fz_obj *extgstate)
  * Operators
  */
 
-static void pdf_run_BDC(pdf_csi *csi)
+/* SumatraPDF: support inline OCGs */
+static void pdf_run_BDC(pdf_csi *csi, fz_obj *rdb)
 {
+	fz_context *ctx = csi->dev->ctx;
+
+	if (csi->in_hidden_ocg > 0)
+		csi->in_hidden_ocg++;
+	else
+	{
+		fz_obj *ocg = fz_dict_gets(ctx, fz_dict_gets(ctx, rdb, "Properties"), csi->name);
+		if (ocg && !strcmp(fz_to_name(ctx, fz_dict_gets(ctx, ocg, "Type")), "OCG") && pdf_is_ocg_hidden(ocg, csi->xref, csi->target))
+			csi->in_hidden_ocg++;
+	}
 }
 
 static fz_error pdf_run_BI(pdf_csi *csi, fz_obj *rdb, fz_stream *file)
@@ -1323,6 +1421,9 @@ static void pdf_run_B(pdf_csi *csi)
 
 static void pdf_run_BMC(pdf_csi *csi)
 {
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		csi->in_hidden_ocg++;
 }
 
 static void pdf_run_BT(pdf_csi *csi)
@@ -1441,7 +1542,12 @@ static fz_error pdf_run_Do(pdf_csi *csi, fz_obj *rdb)
 
 		error = pdf_run_xobject(csi, xobj->resources, xobj, fz_identity);
 		if (error)
-			return fz_error_note(ctx, error, "cannot draw xobject (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+		{
+			/* SumatraPDF: fix memory leak */
+			error = fz_error_note(ctx, error, "cannot draw xobject (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
+			pdf_drop_xobject(ctx, xobj);
+			return error;
+		}
 
 		pdf_drop_xobject(ctx, xobj);
 	}
@@ -1474,6 +1580,9 @@ static fz_error pdf_run_Do(pdf_csi *csi, fz_obj *rdb)
 
 static void pdf_run_EMC(pdf_csi *csi)
 {
+	/* SumatraPDF: support inline OCGs */
+	if (csi->in_hidden_ocg > 0)
+		csi->in_hidden_ocg--;
 }
 
 static void pdf_run_ET(pdf_csi *csi)
@@ -1742,12 +1851,14 @@ static void pdf_run_TJ(pdf_csi *csi)
 
 static void pdf_run_W(pdf_csi *csi)
 {
-	pdf_show_clip(csi, 0);
+	//pdf_show_clip(csi, 0);
+	csi->clip = 1; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
 }
 
 static void pdf_run_Wstar(pdf_csi *csi)
 {
-	pdf_show_clip(csi, 1);
+	//pdf_show_clip(csi, 1);
+	csi->clip = 2; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
 }
 
 static void pdf_run_b(pdf_csi *csi)
@@ -1887,7 +1998,7 @@ static void pdf_run_m(pdf_csi *csi)
 
 static void pdf_run_n(pdf_csi *csi)
 {
-	pdf_show_path(csi, 0, 0, 0, 0);
+	pdf_show_path(csi, 0, 0, 0, csi->clip == 2); /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692391 */
 }
 
 static void pdf_run_q(pdf_csi *csi)
@@ -2042,7 +2153,7 @@ pdf_run_keyword(pdf_csi *csi, fz_obj *rdb, fz_stream *file, char *buf)
 	case A('\''): pdf_run_squote(csi); break;
 	case A('B'): pdf_run_B(csi); break;
 	case B('B','*'): pdf_run_Bstar(csi); break;
-	case C('B','D','C'): pdf_run_BDC(csi); break;
+	case C('B','D','C'): pdf_run_BDC(csi, rdb); break; /* SumatraPDF: support inline OCGs */
 	case B('B','I'):
 		error = pdf_run_BI(csi, rdb, file);
 		if (error)
@@ -2257,20 +2368,28 @@ pdf_run_stream(pdf_csi *csi, fz_obj *rdb, fz_stream *file, char *buf, int buflen
 static fz_error
 pdf_run_buffer(pdf_csi *csi, fz_obj *rdb, fz_buffer *contents)
 {
-	fz_error error;
 	fz_context *ctx = csi->dev->ctx;
-	int len = sizeof csi->xref->scratch;
-	char *buf = fz_malloc(ctx, len); /* we must be re-entrant for type3 fonts */
-	fz_stream *file = fz_open_buffer(ctx, contents);
-	int save_in_text = csi->in_text;
-	csi->in_text = 0;
-	error = pdf_run_stream(csi, rdb, file, buf, len);
-	csi->in_text = save_in_text;
-	fz_close(file);
-	fz_free(ctx, buf);
-	if (error)
-		return fz_error_note(ctx, error, "cannot parse content stream");
-	return fz_okay;
+
+	/* SumatraPDF: be slightly more defensive */
+	if (contents)
+	{
+		fz_error error;
+		int len = sizeof csi->xref->scratch;
+		char *buf = fz_malloc(ctx, len); /* we must be re-entrant for type3 fonts */
+		fz_stream *file = fz_open_buffer(ctx, contents);
+		int save_in_text = csi->in_text;
+		csi->in_text = 0;
+		error = pdf_run_stream(csi, rdb, file, buf, len);
+		csi->in_text = save_in_text;
+		fz_close(file);
+		fz_free(ctx, buf);
+		if (error)
+			/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692260 */
+			fz_error_handle(ctx, error, "couldn't parse the whole content stream, rendering anyway");
+		return fz_okay;
+		/* SumatraPDF: be slightly more defensive */
+	}
+	return fz_error_make(ctx, "cannot run NULL content stream");
 }
 
 fz_error
@@ -2300,7 +2419,11 @@ pdf_run_page_with_usage(pdf_xref *xref, pdf_page *page, fz_device *dev, fz_matri
 			continue;
 		if (flags & (1 << 1)) /* Hidden */
 			continue;
-		if (flags & (1 << 5)) /* NoView */
+		/* SumatraPDF: don't print annotations unless explicitly asked to */
+		if (!(flags & (1 << 2)) /* Print */ && !strcmp(target, "Print"))
+			continue;
+		/* SumatraPDF: only consider the NoView flag for the View target */
+		if ((flags & (1 << 5)) /* NoView */ && !strcmp(target, "View"))
 			continue;
 
 		if (pdf_is_hidden_ocg(ctx, annot->obj, target))

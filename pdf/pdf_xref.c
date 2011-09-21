@@ -22,7 +22,7 @@ pdf_load_version(pdf_xref *xref)
 	if (memcmp(buf, "%PDF-", 5) != 0)
 		return fz_error_make(xref->ctx, "cannot recognize version marker");
 
-	xref->version = atoi(buf + 5) * 10 + atoi(buf + 7);
+	xref->version = fz_atof(buf + 5) * 10 + 0.1; /* SumatraPDF: don't accidentally round down */
 
 	return fz_okay;
 }
