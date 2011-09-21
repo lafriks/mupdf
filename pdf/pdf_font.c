@@ -171,7 +171,7 @@ static int lookup_mre_code(char *name)
  */
 
 static fz_error
-pdf_load_builtin_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname)
+pdf_load_builtin_font(pdf_xref *xref, pdf_font_desc *fontdesc, char *fontname)
 {
 	fz_error error;
 	unsigned char *data;
@@ -179,11 +179,23 @@ pdf_load_builtin_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname)
 
 	data = pdf_find_builtin_font(fontname, &len);
 	if (!data)
-		return fz_error_make(ctx, "cannot find builtin font: '%s'", fontname);
+	{
+#ifdef _WIN32
+		/* we use built-in fonts in addition to those installed on windows
+		   because the metric for Times-Roman in windows fonts seems wrong
+		   and we end up with over-lapping text if this font is used.
+		   poppler doesn't have this problem even when using windows fonts
+		   so maybe there's a better fix. */
+		error = pdf_load_windows_font(xref, fontdesc, fontname);
+		if (fz_okay == error)
+			return fz_okay;
+#endif
+		return fz_error_make(xref->ctx, "cannot find builtin font: '%s'", fontname);
+	}
 
-	error = fz_new_font_from_memory(ctx, &fontdesc->font, data, len, 0);
+	error = fz_new_font_from_memory(xref->ctx, &fontdesc->font, data, len, 0);
 	if (error)
-		return fz_error_note(ctx, error, "cannot load freetype font from memory");
+		return fz_error_note(xref->ctx, error, "cannot load freetype font from memory");
 
 	if (!strcmp(fontname, "Symbol") || !strcmp(fontname, "ZapfDingbats"))
 		fontdesc->flags |= PDF_FD_SYMBOLIC;
@@ -213,32 +225,63 @@ pdf_load_substitute_font(fz_context *ctx, pdf_font_desc *fontdesc, int mono, int
 }
 
 static fz_error
-pdf_load_substitute_cjk_font(fz_context *ctx, pdf_font_desc *fontdesc, int ros, int serif)
+pdf_load_substitute_cjk_font(pdf_xref *xref, pdf_font_desc *fontdesc, int ros, int serif)
 {
 	fz_error error;
 	unsigned char *data;
 	unsigned int len;
 
+#ifdef _WIN32
+	/* Try to fall back to a reasonable TrueType font that might be installed locally */
+	error = pdf_load_similar_cjk_font(xref, fontdesc, ros, serif);
+	if (!error)
+	{
+		fontdesc->font->ft_substitute = 1;
+		return fz_okay;
+	}
+#ifdef NOCJKFONT
+	/* If no CJK fallback font is builtin, maybe one has been shipped separately */
+	error = pdf_load_windows_font(xref, fontdesc, "DroidSansFallback");
+	if (!error)
+	{
+		fontdesc->font->ft_substitute = 1;
+		return fz_okay;
+	}
+#endif
+#endif
+
 	data = pdf_find_substitute_cjk_font(ros, serif, &len);
 	if (!data)
-		return fz_error_make(ctx, "cannot find builtin CJK font");
+		return fz_error_make(xref->ctx, "cannot find builtin CJK font");
 
-	error = fz_new_font_from_memory(ctx, &fontdesc->font, data, len, 0);
+	error = fz_new_font_from_memory(xref->ctx, &fontdesc->font, data, len, 0);
 	if (error)
-		return fz_error_note(ctx, error, "cannot load builtin CJK font");
+		return fz_error_note(xref->ctx, error, "cannot load builtin CJK font");
 
 	fontdesc->font->ft_substitute = 1;
 	return fz_okay;
 }
 
 static fz_error
-pdf_load_system_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname, char *collection)
+pdf_load_system_font(pdf_xref *xref, pdf_font_desc *fontdesc, char *fontname, char *collection)
 {
 	fz_error error;
 	int bold = 0;
 	int italic = 0;
 	int serif = 0;
 	int mono = 0;
+
+#ifdef _WIN32
+	/* try to find a precise match in Windows' fonts before falling back to a built-in one */
+	error = pdf_load_windows_font(xref, fontdesc, fontname);
+	if (!error)
+	{
+		/* TODO: this seems to be required at least for MS-Mincho - why? */
+		if (collection)
+			fontdesc->font->ft_substitute = 1;
+		return fz_okay;
+	}
+#endif
 
 	if (strstr(fontname, "Bold"))
 		bold = 1;
@@ -259,19 +302,26 @@ pdf_load_system_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname, c
 	if (collection)
 	{
 		if (!strcmp(collection, "Adobe-CNS1"))
-			return pdf_load_substitute_cjk_font(ctx, fontdesc, PDF_ROS_CNS, serif);
+			return pdf_load_substitute_cjk_font(xref, fontdesc, PDF_ROS_CNS, serif);
 		else if (!strcmp(collection, "Adobe-GB1"))
-			return pdf_load_substitute_cjk_font(ctx, fontdesc, PDF_ROS_GB, serif);
+			return pdf_load_substitute_cjk_font(xref, fontdesc, PDF_ROS_GB, serif);
 		else if (!strcmp(collection, "Adobe-Japan1"))
-			return pdf_load_substitute_cjk_font(ctx, fontdesc, PDF_ROS_JAPAN, serif);
+			return pdf_load_substitute_cjk_font(xref, fontdesc, PDF_ROS_JAPAN, serif);
 		else if (!strcmp(collection, "Adobe-Korea1"))
-			return pdf_load_substitute_cjk_font(ctx, fontdesc, PDF_ROS_KOREA, serif);
-		return fz_error_make(ctx, "unknown cid collection: %s", collection);
+			return pdf_load_substitute_cjk_font(xref, fontdesc, PDF_ROS_KOREA, serif);
+		/* SumatraPDF: use a standard font for Adobe-Identity fonts */
+		else if (strcmp(collection, "Adobe-Identity") != 0)
+			return fz_error_make(xref->ctx, "unknown cid collection: %s", collection);
 	}
 
-	error = pdf_load_substitute_font(ctx, fontdesc, mono, serif, bold, italic);
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=691690 */
+	// TODO: don't throw, if a non-symbolic encoding is available
+	if ((fontdesc->flags & PDF_FD_SYMBOLIC) && *fontname)
+		return fz_error_make(xref->ctx, "symbolic font '%s' is missing", fontname);
+
+	error = pdf_load_substitute_font(xref->ctx, fontdesc, mono, serif, bold, italic);
 	if (error)
-		return fz_error_note(ctx, error, "cannot load substitute font");
+		return fz_error_note(xref->ctx, error, "cannot load substitute font");
 
 	return fz_okay;
 }
@@ -320,6 +370,8 @@ pdf_drop_font(fz_context *ctx, pdf_font_desc *fontdesc)
 {
 	if (fontdesc && --fontdesc->refs == 0)
 	{
+		/* SumatraPDF: free vertical glyph substitution data (before font!) */
+		pdf_ft_free_vsubst(ctx, fontdesc);
 		if (fontdesc->font)
 			fz_drop_font(ctx, fontdesc->font);
 		if (fontdesc->encoding)
@@ -384,6 +436,9 @@ pdf_new_font_desc(fz_context *ctx)
 
 	fontdesc->is_embedded = 0;
 
+	/* SumatraPDF: vertical glyph substitution */
+	fontdesc->_vsubst = NULL;
+
 	return fontdesc;
 }
 
@@ -424,7 +479,27 @@ pdf_load_simple_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *dict)
 	if (descriptor)
 		error = pdf_load_font_descriptor(fontdesc, xref, descriptor, NULL, basefont);
 	else
-		error = pdf_load_builtin_font(ctx, fontdesc, fontname);
+		error = pdf_load_builtin_font(xref, fontdesc, fontname);
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=691690 */
+	if (error && (fontdesc->flags & PDF_FD_SYMBOLIC))
+	{
+		fz_error_handle(ctx, error, "using bullet-substitute font for '%s' (%d %d R)", fontname, fz_to_num(dict), fz_to_gen(dict));
+		pdf_drop_font(ctx, fontdesc);
+		fontdesc = pdf_new_font_desc(ctx);
+		error = pdf_load_builtin_font(xref, fontdesc, "Symbol");
+		if (!error)
+		{
+			face = fontdesc->font->ft_face;
+			kind = ft_kind(face);
+			fontdesc->encoding = pdf_new_identity_cmap(ctx, 0, 1);
+			fontdesc->cid_to_gid_len = 256;
+			fontdesc->cid_to_gid = fz_calloc(ctx, 256, sizeof(unsigned short));
+			k = FT_Get_Name_Index(face, "bullet");
+			for (i = 0; i < 256; i++)
+				fontdesc->cid_to_gid[i] = k;
+			goto skip_encoding;
+		}
+	}
 	if (error)
 		goto cleanup;
 
@@ -575,7 +650,8 @@ pdf_load_simple_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *dict)
 	}
 
 	/* encode by glyph name where we can */
-	if (kind == TRUETYPE)
+	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692090 */
+	if (kind == TRUETYPE || !strcmp(fz_to_name(ctx, fz_dict_gets(ctx, dict, "Subtype")), "TrueType") && symbolic)
 	{
 		/* Unicode cmap */
 		if (!symbolic && face->charmap && face->charmap->platform_id == 3)
@@ -643,6 +719,12 @@ pdf_load_simple_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *dict)
 			}
 		}
 	}
+
+	/* SumatraPDF: handle symbolic Type 1 fonts with an implicit encoding similar to Adobe Reader */
+	if (kind == TYPE1 && symbolic)
+		for (i = 0; i < 256; i++)
+			if (etable[i] && estrings[i] && !pdf_lookup_agl(estrings[i]))
+				estrings[i] = (char *)pdf_standard[i];
 
 	fontdesc->encoding = pdf_new_identity_cmap(ctx, 0, 1);
 	fontdesc->cid_to_gid_len = 256;
@@ -786,7 +868,8 @@ load_cid_font(pdf_font_desc **fontdescp, pdf_xref *xref, fz_obj *dict, fz_obj *e
 
 	pdf_set_font_wmode(fontdesc, pdf_get_wmode(fontdesc->encoding));
 
-	if (kind == TRUETYPE)
+	/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=1565 */
+	if (kind == TRUETYPE || !strcmp(fz_to_name(ctx, fz_dict_gets(ctx, dict, "Subtype")), "CIDFontType2"))
 	{
 		fz_obj *cidtogidmap;
 
@@ -1018,19 +1101,19 @@ pdf_load_font_descriptor(pdf_font_desc *fontdesc, pdf_xref *xref, fz_obj *dict, 
 		{
 			fz_error_handle(ctx, error, "ignored error when loading embedded font, attempting to load system font");
 			if (origname != fontname)
-				error = pdf_load_builtin_font(ctx, fontdesc, fontname);
+				error = pdf_load_builtin_font(xref, fontdesc, fontname);
 			else
-				error = pdf_load_system_font(ctx, fontdesc, fontname, collection);
+				error = pdf_load_system_font(xref, fontdesc, fontname, collection);
 			if (error)
 				return fz_error_note(ctx, error, "cannot load font descriptor (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 		}
 	}
 	else
 	{
-		if (origname != fontname)
-			error = pdf_load_builtin_font(ctx, fontdesc, fontname);
-		else
-			error = pdf_load_system_font(ctx, fontdesc, fontname, collection);
+		/* Lauris: Prefer system font */
+		error = pdf_load_system_font(xref, fontdesc, fontname, collection);
+		if (error)
+			error = pdf_load_builtin_font(xref, fontdesc, fontname);
 		if (error)
 			return fz_error_note(ctx, error, "cannot load font descriptor (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}
@@ -1076,7 +1159,9 @@ pdf_make_width_table(fz_context *ctx, pdf_font_desc *fontdesc)
 		{
 			cid = pdf_lookup_cmap(fontdesc->encoding, k);
 			gid = pdf_font_cid_to_gid(fontdesc, cid);
-			if (gid >= 0 && gid < font->width_count)
+			/* SumatraPDF: Widths are per cid, so there could be clashes, if two cids
+			               map to the same gid (for now, prefer the non-zero width) */
+			if (gid >= 0 && gid < font->width_count && fontdesc->hmtx[i].w != 0)
 				font->width_table[gid] = fontdesc->hmtx[i].w;
 		}
 	}

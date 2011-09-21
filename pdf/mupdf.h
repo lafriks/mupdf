@@ -39,6 +39,17 @@ unsigned short *pdf_to_ucs2(fz_context *ctx, fz_obj *src);
 fz_obj *pdf_to_utf8_name(fz_context *ctx, fz_obj *src);
 char *pdf_from_ucs2(fz_context *ctx, unsigned short *str);
 
+#ifdef _WIN32
+/*
+ * Windows font list
+ */
+typedef struct pdf_windows_fontlist_s pdf_windows_fontlist;
+
+void pdf_new_windows_fontlist(fz_context *ctx, pdf_windows_fontlist **flp);
+void pdf_free_windows_fontlist(fz_context *ctx, pdf_windows_fontlist *fl);
+
+#endif
+
 /*
  * xref and object / stream api
  */
@@ -76,6 +87,10 @@ struct pdf_xref_s
 	struct pdf_store_s *store;
 
 	char scratch[65536];
+
+#ifdef _WIN32
+	pdf_windows_fontlist *win_fontlist;
+#endif
 };
 
 fz_obj *pdf_resolve_indirect(fz_obj *ref);
@@ -375,6 +390,9 @@ struct pdf_font_desc_s
 	pdf_vmtx *vmtx;
 
 	int is_embedded;
+
+	/* SumatraPDF: store vertical glyph substitution data for the font's lifetime */
+	void *_vsubst;
 };
 
 void pdf_set_font_wmode(pdf_font_desc *font, int wmode);
@@ -398,11 +416,20 @@ unsigned char *pdf_find_substitute_cjk_font(int ros, int serif, unsigned int *le
 fz_error pdf_load_type3_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
 fz_error pdf_load_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
 
+#ifdef _WIN32
+fz_error pdf_load_similar_cjk_font(pdf_xref *xref, pdf_font_desc *font, int ros, int serif);
+fz_error pdf_load_windows_font(pdf_xref *xref, pdf_font_desc *font, char *fontname);
+#endif
+
 pdf_font_desc *pdf_new_font_desc(fz_context *ctx);
 pdf_font_desc *pdf_keep_font(pdf_font_desc *fontdesc);
 void pdf_drop_font(fz_context *ctx, pdf_font_desc *font);
 
 void pdf_debug_font(pdf_font_desc *fontdesc);
+
+/* SumatraPDF */
+int pdf_ft_get_vgid(fz_context *ctx, pdf_font_desc *fontdesc, int gid);
+void pdf_ft_free_vsubst(fz_context *ctx, pdf_font_desc *fontdesc);
 
 /*
  * Interactive features
@@ -495,3 +522,4 @@ fz_error pdf_run_page(pdf_xref *xref, pdf_page *page, fz_device *dev, fz_matrix 
 fz_error pdf_run_glyph(pdf_xref *xref, fz_obj *resources, fz_buffer *contents, fz_device *dev, fz_matrix ctm);
 
 #endif
+

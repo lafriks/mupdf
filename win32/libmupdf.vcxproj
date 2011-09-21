@@ -130,6 +130,7 @@
     <ClCompile Include="..\pdf\pdf_encoding.c" />
     <ClCompile Include="..\pdf\pdf_font.c" />
     <ClCompile Include="..\pdf\pdf_fontfile.c" />
+    <ClCompile Include="..\pdf\pdf_ft_tools.c" />
     <ClCompile Include="..\pdf\pdf_function.c" />
     <ClCompile Include="..\pdf\pdf_image.c" />
     <ClCompile Include="..\pdf\pdf_interpret.c" />

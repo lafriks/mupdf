@@ -131,7 +131,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftwinfnt.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftxf86.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftpatent.c \
-	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/bdf/bdf.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/base/ftpatent.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cache/ftcache.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cff/cff.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/cid/type1cid.c \
@@ -148,6 +148,7 @@ LOCAL_SRC_FILES := \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/truetype/truetype.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/type1/type1.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/type42/type42.c \
+	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/otvalid/otvalid.c \
 	$(MY_ROOT)/thirdparty/freetype-2.4.6/src/winfonts/winfnt.c
 
 include $(BUILD_STATIC_LIBRARY)

@@ -534,6 +534,10 @@ pdf_open_xref_with_stream(pdf_xref **xrefp, fz_stream *file, char *password)
 	xref->file = fz_keep_stream(file);
 	xref->ctx = ctx;
 
+#ifdef _WIN32
+	pdf_new_windows_fontlist(ctx, &xref->win_fontlist);
+#endif
+
 	error = pdf_load_xref(xref, xref->scratch, sizeof xref->scratch);
 	if (error)
 	{
@@ -681,6 +685,10 @@ pdf_free_xref(pdf_xref *xref)
 		fz_drop_obj(ctx, xref->trailer);
 	if (xref->crypt)
 		pdf_free_crypt(ctx, xref->crypt);
+
+#ifdef _WIN32
+	pdf_free_windows_fontlist(ctx, xref->win_fontlist);
+#endif
 
 	fz_free(ctx, xref);
 }
