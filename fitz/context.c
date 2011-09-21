@@ -6,7 +6,9 @@ void fz_context_fin(fz_context *ctx)
 	assert(ctx != NULL);
 
 	/* Other finalisation calls go here (in reverse order) */
+#ifndef SKIP_FONT_CONTEXT
 	fz_free_font_context(ctx);
+#endif
 	fz_except_fin(ctx);
 	/* Free the context itself */
 	ctx->alloc->free(ctx->alloc->opaque, ctx);
@@ -36,8 +38,11 @@ fz_context *fz_context_init(fz_alloc_context *alloc)
 
 	ctx->error_count = 0;
 	ctx->warn_count = 0;
-
+#ifndef SKIP_FONT_CONTEXT
 	fz_new_font_context(ctx);
+#else
+	ctx->ft = NULL;
+#endif
 
 	//TODO: Add alphabits initialization
 
@@ -62,11 +67,15 @@ fz_context *fz_context_clone(fz_context *ctx)
 	if (error != fz_okay)
 		goto cleanup;
 
-	//TODO: What to do with error messages?
-	clone->error_count = ctx->error_count;
-	clone->warn_count = ctx->warn_count;
+	/* Do not clone warnings and error messages */
+	clone->error_count = 0;
+	clone->warn_count = 0;
 
+#ifndef SKIP_FONT_CONTEXT
 	fz_new_font_context(clone);
+#else
+	ctx->ft = NULL;
+#endif
 
 	//TODO: Add alphabits cloning
 

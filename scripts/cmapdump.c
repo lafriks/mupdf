@@ -5,6 +5,8 @@
 
 /* We never want to build memento versions of the cmapdump util */
 #undef MEMENTO
+/* Disable font context initialization */
+#define SKIP_FONT_CONTEXT
 
 #include "fitz.h"
 #include "mupdf.h"
@@ -88,12 +90,12 @@ main(int argc, char **argv)
 
 		fi = fz_open_file(ctx, argv[i]);
 		if (!fi)
-			fz_error_make("cmapdump: could not open input file '%s'\n", argv[i]);
+			fz_error_make(ctx, "cmapdump: could not open input file '%s'\n", argv[i]);
 
 		error = pdf_parse_cmap(&cmap, fi);
 		if (error)
 		{
-			fz_error_handle(error, "cmapdump: could not parse input cmap '%s'\n", argv[i]);
+			fz_error_handle(ctx, error, "cmapdump: could not parse input cmap '%s'\n", argv[i]);
 			return 1;
 		}
 
