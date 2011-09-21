@@ -600,6 +600,18 @@
 					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftxf86.c"
 					>
 				</File>
+				<File
+					RelativePath="..\thirdparty\freetype-2.4.6\src\base\ftotval.c"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="otvalid"
+				>
+				<File
+					RelativePath="..\thirdparty\freetype-2.4.6\src\otvalid\otvalid.c"
+					>
+				</File>
 			</Filter>
 		</Filter>
 	</Files>

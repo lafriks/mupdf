@@ -24,12 +24,14 @@ FREETYPE_SRC := \
 	ftgasp.c \
 	ftglyph.c \
 	ftinit.c \
+	ftotval.c \
 	ftstroke.c \
 	ftsynth.c \
 	ftsystem.c \
 	fttype1.c \
 	ftxf86.c \
 	cff.c \
+	otvalid.c \
 	psaux.c \
 	pshinter.c \
 	psnames.c \
@@ -51,6 +53,8 @@ $(OUT)/ft_%.o: $(FREETYPE_DIR)/src/base/%.c	| $(OUT)
 $(OUT)/ft_%.o: $(FREETYPE_DIR)/src/cff/%.c	| $(OUT)
 	$(CC_CMD) $(FT_CFLAGS)
 $(OUT)/ft_%.o: $(FREETYPE_DIR)/src/cid/%.c	| $(OUT)
+	$(CC_CMD) $(FT_CFLAGS)
+$(OUT)/ft_%.o: $(FREETYPE_DIR)/src/otvalid/%.c	| $(OUT)
 	$(CC_CMD) $(FT_CFLAGS)
 $(OUT)/ft_%.o: $(FREETYPE_DIR)/src/psaux/%.c	| $(OUT)
 	$(CC_CMD) $(FT_CFLAGS)
