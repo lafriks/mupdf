@@ -943,8 +943,8 @@ void fz_free_glyph_cache(fz_context *ctx, fz_glyph_cache *);
  * Scan converter
  */
 
-int fz_get_aa_level(void);
-void fz_set_aa_level(int bits);
+int fz_get_aa_level(fz_context *ctx);
+void fz_set_aa_level(fz_context *ctx, int bits);
 
 typedef struct fz_gel_s fz_gel;
 
@@ -1164,10 +1164,18 @@ struct fz_context
 	fz_obj *(*fz_resolve_indirect)(fz_obj*);
 
 	/* Error/warning messages */
-    char warn_message[FZ_ERR_LINE_LEN];
-    int warn_count;
-    char error_message[FZ_ERR_LINE_COUNT][FZ_ERR_LINE_LEN];
-    int error_count;
+	char warn_message[FZ_ERR_LINE_LEN];
+	int warn_count;
+	char error_message[FZ_ERR_LINE_COUNT][FZ_ERR_LINE_LEN];
+	int error_count;
+
+#ifndef AA_BITS
+	/* Anti-aliasing */
+	int fz_aa_hscale;
+	int fz_aa_vscale;
+	int fz_aa_scale;
+	int fz_aa_level;
+#endif
 
 	/* Font context */
 	fz_font_context *ft;

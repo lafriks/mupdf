@@ -44,7 +44,13 @@ fz_context *fz_context_init(fz_alloc_context *alloc)
 	ctx->ft = NULL;
 #endif
 
-	//TODO: Add alphabits initialization
+#ifndef AA_BITS
+	/* Anti-aliasing */
+	ctx->fz_aa_hscale = 17;
+	ctx->fz_aa_vscale = 15;
+	ctx->fz_aa_scale = 256;
+	ctx->fz_aa_level = 8;
+#endif
 
 	/* New initialisation calls for context entries go here */
 	return ctx;
@@ -77,7 +83,13 @@ fz_context *fz_context_clone(fz_context *ctx)
 	ctx->ft = NULL;
 #endif
 
-	//TODO: Add alphabits cloning
+#ifndef AA_BITS
+	/* Anti-aliasing */
+	clone->fz_aa_hscale = ctx->fz_aa_hscale;
+	clone->fz_aa_vscale = ctx->fz_aa_vscale;
+	clone->fz_aa_scale = ctx->fz_aa_scale;
+	clone->fz_aa_level = ctx->fz_aa_level;
+#endif
 
 	/* Other initialisations go here; either a copy (probably refcounted)
 	 * or a new initialisation. */
