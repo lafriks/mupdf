@@ -7,7 +7,6 @@ cscope.*
 tags
 TAGS
 win32/*.user
-win32/*.filters
 win32/*.sdf
 win32/*.opensdf
 win32/*.ncb
