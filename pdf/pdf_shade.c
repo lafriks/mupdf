@@ -580,6 +580,7 @@ pdf_load_mesh_params(pdf_xref *xref, fz_obj *dict, struct mesh_params *p)
 		p->x1 = fz_to_real(ctx, fz_array_get(ctx, obj, 1));
 		p->y0 = fz_to_real(ctx, fz_array_get(ctx, obj, 2));
 		p->y1 = fz_to_real(ctx, fz_array_get(ctx, obj, 3));
+
 		for (i = 0; i < n; i++)
 		{
 			p->c0[i] = fz_to_real(ctx, fz_array_get(ctx, obj, 4 + i * 2));
@@ -712,8 +713,8 @@ pdf_load_type5_shade(fz_shade *shade, pdf_xref *xref, fz_obj *dict,
 		first = 0;
 	}
 
-	free(ref);
-	free(buf);
+	fz_free(ctx, ref);
+	fz_free(ctx, buf);
 }
 
 /* Type 6 & 7 -- Patch mesh shadings */
@@ -1103,7 +1104,7 @@ pdf_load_shading(fz_shade **shadep, pdf_xref *xref, fz_obj *dict)
 	fz_obj *obj;
 	fz_context *ctx = xref->ctx;
 
-	if ((*shadep = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)fz_drop_shade, dict)))
+	if ((*shadep = pdf_find_item(ctx, xref->store, fz_drop_shade, dict)))
 	{
 		fz_keep_shade(*shadep);
 		return fz_okay;
@@ -1144,7 +1145,7 @@ pdf_load_shading(fz_shade **shadep, pdf_xref *xref, fz_obj *dict)
 			return fz_error_note(ctx, error, "cannot load shading dictionary (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}
 
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)fz_keep_shade, (pdf_store_drop_fn *)fz_drop_shade, dict, *shadep);
+	pdf_store_item(ctx, xref->store, fz_keep_shade, fz_drop_shade, dict, *shadep);
 
 	return fz_okay;
 }

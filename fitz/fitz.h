@@ -151,8 +151,10 @@ char *fz_get_error_line(fz_context *ctx, int n);
 void *fz_malloc(fz_context *ctx, size_t size);
 void *fz_calloc(fz_context *ctx, size_t count, size_t size);
 void *fz_realloc(fz_context *ctx, void *p, size_t size);
-char *fz_strdup(fz_context *ctx, char *s);
+/* SumatraPDF: allow to failibly allocate memory */
+void *fz_calloc_no_abort(fz_context *ctx, int count, int size);
 
+char *fz_strdup(fz_context *ctx, char *s);
 void fz_free(fz_context *ctx, void *p);
 
 /* The following returns NULL on failure to allocate */
@@ -291,6 +293,8 @@ fz_point fz_transform_vector(fz_matrix m, fz_point p);
 fz_rect fz_transform_rect(fz_matrix m, fz_rect r);
 fz_bbox fz_transform_bbox(fz_matrix m, fz_bbox b);
 
+void fz_gridfit_matrix(fz_matrix *m);
+
 /*
  * Basic crypto functions.
  * Independent of the rest of fitz.
@@ -419,6 +423,7 @@ fz_obj *fz_array_get(fz_context *ctx, fz_obj *array, int i);
 void fz_array_put(fz_context *ctx, fz_obj *array, int i, fz_obj *obj);
 void fz_array_push(fz_context *ctx, fz_obj *array, fz_obj *obj);
 void fz_array_insert(fz_context *ctx, fz_obj *array, fz_obj *obj);
+int fz_array_contains(fz_context *ctx, fz_obj *array, fz_obj *obj);
 
 int fz_dict_len(fz_context *ctx, fz_obj *dict);
 fz_obj *fz_dict_get_key(fz_context *ctx, fz_obj *dict, int idx);
@@ -628,6 +633,7 @@ struct fz_pixmap_s
 	fz_colorspace *colorspace;
 	unsigned char *samples;
 	int free_samples;
+	int has_alpha; /* SumatraPDF: allow optimizing non-alpha pixmaps */
 };
 
 /* will return NULL if soft limit is exceeded */
@@ -644,13 +650,13 @@ void fz_clear_pixmap_with_color(fz_pixmap *pix, int value);
 void fz_clear_pixmap_rect_with_color(fz_pixmap *pix, int value, fz_bbox r);
 void fz_copy_pixmap_rect(fz_pixmap *dest, fz_pixmap *src, fz_bbox r);
 void fz_premultiply_pixmap(fz_pixmap *pix);
+void fz_unmultiply_pixmap(fz_pixmap *pix);
 fz_pixmap *fz_alpha_from_gray(fz_context *ctx, fz_pixmap *gray, int luminosity);
 fz_bbox fz_bound_pixmap(fz_pixmap *pix);
 void fz_invert_pixmap(fz_pixmap *pix);
 void fz_gamma_pixmap(fz_pixmap *pix, float gamma);
 
 fz_pixmap *fz_scale_pixmap(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h);
-fz_pixmap *fz_scale_pixmap_gridfit(fz_context *ctx, fz_pixmap *src, float x, float y, float w, float h, int gridfit);
 
 fz_error fz_write_pnm(fz_context *ctx, fz_pixmap *pixmap, char *filename);
 fz_error fz_write_pam(fz_context *ctx, fz_pixmap *pixmap, char *filename, int savealpha);
@@ -818,6 +824,7 @@ struct fz_path_s
 {
 	int len, cap;
 	fz_path_item *items;
+	fz_context *ctx;
 };
 
 struct fz_stroke_state_s
@@ -832,17 +839,17 @@ struct fz_stroke_state_s
 };
 
 fz_path *fz_new_path(fz_context *ctx);
-void fz_moveto(fz_context*, fz_path*, float x, float y);
-void fz_lineto(fz_context*, fz_path*, float x, float y);
-void fz_curveto(fz_context*,fz_path*, float, float, float, float, float, float);
-void fz_curvetov(fz_context*,fz_path*, float, float, float, float);
-void fz_curvetoy(fz_context*,fz_path*, float, float, float, float);
-void fz_closepath(fz_context*,fz_path*);
-void fz_free_path(fz_context *ctx, fz_path *path);
+void fz_moveto(fz_path*, float x, float y);
+void fz_lineto(fz_path*, float x, float y);
+void fz_curveto(fz_path*, float, float, float, float, float, float);
+void fz_curvetov(fz_path*, float, float, float, float);
+void fz_curvetoy(fz_path*, float, float, float, float);
+void fz_closepath(fz_path*);
+void fz_free_path(fz_path *path);
 
 void fz_transform_path(fz_path *path, fz_matrix transform);
 
-fz_path *fz_clone_path(fz_context *ctx, fz_path *old);
+fz_path *fz_clone_path(fz_path *old);
 
 fz_rect fz_bound_path(fz_path *path, fz_stroke_state *stroke, fz_matrix ctm);
 void fz_debug_path(fz_path *, int indent);
@@ -987,34 +994,34 @@ struct fz_device_s
 	int flags;
 
 	void *user;
-	void (*free_user)(fz_device *);
+	void (*free_user)(fz_context *ctx, void *);
 	fz_context *ctx;
 
-	void (*fill_path)(fz_device *, fz_path *, int even_odd, fz_matrix, fz_colorspace *, float *color, float alpha);
-	void (*stroke_path)(fz_device *, fz_path *, fz_stroke_state *, fz_matrix, fz_colorspace *, float *color, float alpha);
-	void (*clip_path)(fz_device *, fz_path *, fz_rect *rect, int even_odd, fz_matrix);
-	void (*clip_stroke_path)(fz_device *, fz_path *, fz_rect *rect, fz_stroke_state *, fz_matrix);
+	void (*fill_path)(fz_context *ctx, void *, fz_path *, int even_odd, fz_matrix, fz_colorspace *, float *color, float alpha);
+	void (*stroke_path)(fz_context *ctx, void *, fz_path *, fz_stroke_state *, fz_matrix, fz_colorspace *, float *color, float alpha);
+	void (*clip_path)(fz_context *ctx, void *, fz_path *, fz_rect *rect, int even_odd, fz_matrix);
+	void (*clip_stroke_path)(fz_context *ctx, void *, fz_path *, fz_rect *rect, fz_stroke_state *, fz_matrix);
 
-	void (*fill_text)(fz_device *, fz_text *, fz_matrix, fz_colorspace *, float *color, float alpha);
-	void (*stroke_text)(fz_device *, fz_text *, fz_stroke_state *, fz_matrix, fz_colorspace *, float *color, float alpha);
-	void (*clip_text)(fz_device *, fz_text *, fz_matrix, int accumulate);
-	void (*clip_stroke_text)(fz_device *, fz_text *, fz_stroke_state *, fz_matrix);
-	void (*ignore_text)(fz_device *, fz_text *, fz_matrix);
+	void (*fill_text)(fz_context *ctx, void *, fz_text *, fz_matrix, fz_colorspace *, float *color, float alpha);
+	void (*stroke_text)(fz_context *ctx, void *, fz_text *, fz_stroke_state *, fz_matrix, fz_colorspace *, float *color, float alpha);
+	void (*clip_text)(fz_context *ctx, void *, fz_text *, fz_matrix, int accumulate);
+	void (*clip_stroke_text)(fz_context *ctx, void *, fz_text *, fz_stroke_state *, fz_matrix);
+	void (*ignore_text)(fz_context *ctx, void *, fz_text *, fz_matrix);
 
-	void (*fill_shade)(fz_device *, fz_shade *shd, fz_matrix ctm, float alpha);
-	void (*fill_image)(fz_device *, fz_pixmap *img, fz_matrix ctm, float alpha);
-	void (*fill_image_mask)(fz_device *, fz_pixmap *img, fz_matrix ctm, fz_colorspace *, float *color, float alpha);
-	void (*clip_image_mask)(fz_device *, fz_pixmap *img, fz_rect *rect, fz_matrix ctm);
+	void (*fill_shade)(fz_context *ctx, void *, fz_shade *shd, fz_matrix ctm, float alpha);
+	void (*fill_image)(fz_context *ctx, void *, fz_pixmap *img, fz_matrix ctm, float alpha);
+	void (*fill_image_mask)(fz_context *ctx, void *, fz_pixmap *img, fz_matrix ctm, fz_colorspace *, float *color, float alpha);
+	void (*clip_image_mask)(fz_context *ctx, void *, fz_pixmap *img, fz_rect *rect, fz_matrix ctm);
 
-	void (*pop_clip)(fz_device *);
+	void (*pop_clip)(fz_context *ctx, void *);
 
-	void (*begin_mask)(fz_device *, fz_rect, int luminosity, fz_colorspace *, float *bc);
-	void (*end_mask)(fz_device *);
-	void (*begin_group)(fz_device *, fz_rect, int isolated, int knockout, int blendmode, float alpha);
-	void (*end_group)(fz_device *);
+	void (*begin_mask)(fz_context *ctx, void *, fz_rect, int luminosity, fz_colorspace *, float *bc);
+	void (*end_mask)(fz_context *ctx, void *);
+	void (*begin_group)(fz_context *ctx, void *, fz_rect, int isolated, int knockout, int blendmode, float alpha);
+	void (*end_group)(fz_context *ctx, void *);
 
-	void (*begin_tile)(fz_device *, fz_rect area, fz_rect view, float xstep, float ystep, fz_matrix ctm);
-	void (*end_tile)(fz_device *);
+	void (*begin_tile)(fz_context *ctx, void *, fz_rect area, fz_rect view, float xstep, float ystep, fz_matrix ctm);
+	void (*end_tile)(fz_context *ctx, void *);
 };
 
 void fz_fill_path(fz_device *dev, fz_path *path, int even_odd, fz_matrix ctm, fz_colorspace *colorspace, float *color, float alpha);
@@ -1045,6 +1052,9 @@ fz_device *fz_new_trace_device(fz_context *ctx);
 fz_device *fz_new_bbox_device(fz_context *ctx, fz_bbox *bboxp);
 fz_device *fz_new_draw_device(fz_context *ctx, fz_glyph_cache *cache, fz_pixmap *dest);
 fz_device *fz_new_draw_device_type3(fz_context *ctx, fz_glyph_cache *cache, fz_pixmap *dest);
+
+/* SumatraPDF: GDI+ draw device */
+fz_device *fz_new_gdiplus_device(fz_context *ctx, void *hDC, fz_bbox baseClip);
 
 /*
  * Text extraction device
@@ -1089,6 +1099,30 @@ fz_device *fz_new_list_device(fz_context *ctx, fz_display_list *list);
 void fz_execute_display_list(fz_display_list *list, fz_device *dev, fz_matrix ctm, fz_bbox area);
 /* SumatraPDF: allow to optimize handling of single-image pages */
 int fz_list_is_single_image(fz_display_list *list);
+/* SumatraPDF: allow to detect pages requiring blending */
+int fz_list_requires_blending(fz_display_list *list);
+
+/*
+ * Document interface.
+ */
+
+typedef struct fz_outline_s fz_outline;
+
+struct fz_outline_s
+{
+	char *title;
+	int page;
+	fz_outline *next;
+	fz_outline *down;
+	int is_open; /* SumatraPDF: support expansion states */
+	/* SumatraPDF: extended outline actions */
+	void *data;
+	void (*free_data)(fz_context *ctx, void *data);
+};
+
+void fz_debug_outline_xml(fz_outline *outline, int level);
+void fz_debug_outline(fz_outline *outline, int level);
+void fz_free_outline(fz_context *ctx, fz_outline *outline);
 
 /*
  * Plotting functions.
@@ -1115,6 +1149,8 @@ void fz_paint_pixmap_with_mask(fz_pixmap *dst, fz_pixmap *src, fz_pixmap *msk);
 void fz_paint_pixmap_with_rect(fz_pixmap *dst, fz_pixmap *src, int alpha, fz_bbox bbox);
 
 void fz_blend_pixmap(fz_pixmap *dst, fz_pixmap *src, int alpha, int blendmode, int isolated, fz_pixmap *shape);
+/* SumatraPDF: expose blending formulas to dev_gdiplus.cpp */
+void fz_blend_pixel(int dp[3], int bp[3], int sp[3], int blendmode);
 
 enum
 {
@@ -1187,5 +1223,9 @@ struct fz_context
 
 fz_context *fz_context_init(fz_alloc_context *alloc);
 void fz_context_fin(fz_context *ctx);
+
+/* SumatraPDF: basic global synchronizing */
+void fz_synchronize_begin();
+void fz_synchronize_end();
 
 #endif

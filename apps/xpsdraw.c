@@ -1,8 +1,10 @@
 #include "fitz.h"
 #include "muxps.h"
 
-#ifdef _MSC_VER
-#include <winsock2.h>
+/* SumatraPDF: add support for GDI+ draw device */
+#ifdef _WIN32
+#include <windows.h>
+#define GDI_PLUS_BMP_RENDERER
 #else
 #include <sys/time.h>
 #endif
@@ -14,6 +16,7 @@ int showxml = 0;
 int showtext = 0;
 int showtime = 0;
 int showmd5 = 0;
+int showoutline = 0;
 int savealpha = 0;
 int uselist = 1;
 
@@ -39,7 +42,11 @@ static void usage(void)
 	fprintf(stderr,
 		"usage: xpsdraw [options] input.xps [pages]\n"
 		"\t-o -\toutput filename (%%d for page number)\n"
+#ifdef GDI_PLUS_BMP_RENDERER
+		"\t\tsupported formats: pgm, ppm, pam, png, bmp\n"
+#else
 		"\t\tsupported formats: pgm, ppm, pam, png\n"
+#endif
 		"\t-r -\tresolution in dpi (default: 72)\n"
 		"\t-a\tsave alpha channel (only pam and png)\n"
 		"\t-g\trender in grayscale\n"
@@ -48,6 +55,7 @@ static void usage(void)
 		"\t-x\tshow display list\n"
 		"\t-d\tdisable use of display list\n"
 		"\t-5\tshow md5 checksums\n"
+		"\t-l\tprint outline\n"
 		"\tpages\tcomma separated list of ranges\n");
 	exit(1);
 }
@@ -84,6 +92,114 @@ xps_run_page(xps_context *ctx, xps_page *page, fz_device *dev, fz_matrix ctm)
 	xps_parse_fixed_page(ctx, ctm, page);
 	ctx->dev = NULL;
 }
+
+#ifdef GDI_PLUS_BMP_RENDERER
+static void drawbmp(xps_context *ctx, xps_page *page, fz_display_list *list, int pagenum)
+{
+	float zoom;
+	fz_matrix ctm;
+	fz_bbox bbox;
+	fz_rect rect;
+
+	int w, h;
+	fz_device *dev;
+	HDC hDC, hDCMain;
+	RECT rc;
+	HBRUSH bgBrush;
+	HBITMAP hbmp;
+	BITMAPINFO bmi = { 0 };
+	int bmpDataLen;
+	char *bmpData;
+
+	rect.x0 = rect.y0 = 0;
+	rect.x1 = page->width;
+	rect.y1 = page->height;
+
+	zoom = resolution / 96;
+	ctm = fz_translate(0, -page->height);
+	ctm = fz_concat(ctm, fz_scale(zoom, zoom));
+	bbox = fz_round_rect(fz_transform_rect(ctm, rect));
+
+	ctm = fz_concat(ctm, fz_translate(-bbox.x0, -bbox.y0));
+	w = bbox.x1 - bbox.x0;
+	h = bbox.y1 - bbox.y0;
+
+	hDCMain = GetDC(NULL);
+	hDC = CreateCompatibleDC(hDCMain);
+	hbmp = CreateCompatibleBitmap(hDCMain, w, h);
+	DeleteObject(SelectObject(hDC, hbmp));
+
+	SetRect(&rc, 0, 0, w, h);
+	bgBrush = CreateSolidBrush(RGB(0xFF,0xFF,0xFF));
+	FillRect(hDC, &rc, bgBrush);
+	DeleteObject(bgBrush);
+
+	bbox.x0 = 0; bbox.x1 = w;
+	bbox.y0 = 0; bbox.y1 = h;
+
+	dev = fz_new_gdiplus_device(ctx->ctx, hDC, bbox);
+	if (list)
+		fz_execute_display_list(list, dev, ctm, bbox);
+	else
+		xps_run_page(ctx, page, dev, ctm);
+	fz_free_device(dev);
+
+	bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+	bmi.bmiHeader.biHeight = h;
+	bmi.bmiHeader.biWidth = w;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 24;
+	bmi.bmiHeader.biCompression = BI_RGB;
+
+	bmpDataLen = ((w * 3 + 3) / 4) * 4 * h;
+	bmpData = fz_malloc(ctx->ctx, bmpDataLen);
+	if (!GetDIBits(hDC, hbmp, 0, h, bmpData, &bmi, DIB_RGB_COLORS))
+		die(ctx->ctx, fz_error_make(ctx->ctx, "gdierror: cannot draw page %d in PDF file '%s'", pagenum, filename));
+
+	DeleteDC(hDC);
+	ReleaseDC(NULL, hDCMain);
+	DeleteObject(hbmp);
+
+	if (output)
+	{
+		char buf[512];
+		int fd;
+		BITMAPFILEHEADER bmpfh = { 0 };
+
+		sprintf(buf, output, pagenum);
+		fd = open(buf, O_BINARY|O_WRONLY|O_CREAT|O_TRUNC, 0666);
+		if (fd < 0)
+			die(ctx->ctx, fz_error_make(ctx->ctx, "ioerror: could not create raster file '%s'", buf));
+
+		bmpfh.bfType = MAKEWORD('B', 'M');
+		bmpfh.bfOffBits = sizeof(bmpfh) + sizeof(bmi);
+		bmpfh.bfSize = bmpfh.bfOffBits + bmpDataLen;
+
+		write(fd, &bmpfh, sizeof(bmpfh));
+		write(fd, &bmi, sizeof(bmi));
+		write(fd, bmpData, bmpDataLen);
+
+		close(fd);
+	}
+
+	if (showmd5)
+	{
+		fz_md5 md5;
+		unsigned char digest[16];
+		int i;
+
+		fz_md5_init(&md5);
+		fz_md5_update(&md5, bmpData, bmpDataLen);
+		fz_md5_final(&md5, digest);
+
+		printf(" ");
+		for (i = 0; i < 16; i++)
+			printf("%02x", digest[i]);
+	}
+
+	fz_free(ctx->ctx, bmpData);
+}
+#endif
 
 static void drawpage(xps_context *ctx, int pagenum)
 {
@@ -145,6 +261,11 @@ static void drawpage(xps_context *ctx, int pagenum)
 	if (showmd5 || showtime)
 		printf("page %s %d", filename, pagenum);
 
+#ifdef GDI_PLUS_BMP_RENDERER
+	if (output && strstr(output, ".bmp"))
+		drawbmp(ctx, page, list, pagenum);
+	else
+#endif
 	if (output || showmd5 || showtime)
 	{
 		float zoom;
@@ -273,6 +394,16 @@ static void drawrange(xps_context *ctx, char *range)
 	}
 }
 
+static void drawoutline(xps_context *ctx)
+{
+	fz_outline *outline = xps_load_outline(ctx);
+	if (showoutline > 1)
+		fz_debug_outline_xml(outline, 0);
+	else
+		fz_debug_outline(outline, 0);
+	fz_free_outline(ctx->ctx, outline);
+}
+
 int main(int argc, char **argv)
 {
 	int grayscale = 0;
@@ -281,7 +412,7 @@ int main(int argc, char **argv)
 	int code;
 	int c;
 
-	while ((c = fz_getopt(argc, argv, "o:p:r:Aadgmtx5")) != -1)
+	while ((c = fz_getopt(argc, argv, "o:p:r:Aadglmtx5")) != -1)
 	{
 		switch (c)
 		{
@@ -289,6 +420,7 @@ int main(int argc, char **argv)
 		case 'r': resolution = atof(fz_optarg); break;
 		case 'A': accelerate = 0; break;
 		case 'a': savealpha = 1; break;
+		case 'l': showoutline++; break;
 		case 'm': showtime++; break;
 		case 't': showtext++; break;
 		case 'x': showxml++; break;
@@ -302,7 +434,7 @@ int main(int argc, char **argv)
 	if (fz_optind == argc)
 		usage();
 
-	if (!showtext && !showxml && !showtime && !showmd5 && !output)
+	if (!showtext && !showxml && !showtime && !showmd5 && !showoutline && !output)
 	{
 		printf("nothing to do\n");
 		exit(0);
@@ -349,10 +481,16 @@ int main(int argc, char **argv)
 		if (showxml)
 			printf("<document name=\"%s\">\n", filename);
 
-		if (fz_optind == argc || !isrange(argv[fz_optind]))
-			drawrange(ctx, "1-");
-		if (fz_optind < argc && isrange(argv[fz_optind]))
-			drawrange(ctx, argv[fz_optind++]);
+		if (showoutline)
+			drawoutline(ctx);
+
+		if (showtext || showxml || showtime || showmd5 || output)
+		{
+			if (fz_optind == argc || !isrange(argv[fz_optind]))
+				drawrange(ctx, "1-");
+			if (fz_optind < argc && isrange(argv[fz_optind]))
+				drawrange(ctx, argv[fz_optind++]);
+		}
 
 		if (showxml)
 			printf("</document>\n");

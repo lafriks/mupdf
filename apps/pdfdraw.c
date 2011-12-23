@@ -5,8 +5,10 @@
 #include "fitz.h"
 #include "mupdf.h"
 
-#ifdef _MSC_VER
-#include <winsock2.h>
+/* SumatraPDF: add support for GDI+ draw device */
+#ifdef _WIN32
+#include <windows.h>
+#define GDI_PLUS_BMP_RENDERER
 #else
 #include <sys/time.h>
 #endif
@@ -19,6 +21,7 @@ int showxml = 0;
 int showtext = 0;
 int showtime = 0;
 int showmd5 = 0;
+int showoutline = 0;
 int savealpha = 0;
 int uselist = 1;
 int alphabits = 8;
@@ -46,7 +49,11 @@ static void usage(void)
 	fprintf(stderr,
 		"usage: pdfdraw [options] input.pdf [pages]\n"
 		"\t-o -\toutput filename (%%d for page number)\n"
+#ifdef GDI_PLUS_BMP_RENDERER
+		"\t\tsupported formats: pgm, ppm, pam, png, pbm, bmp\n"
+#else
 		"\t\tsupported formats: pgm, ppm, pam, png, pbm\n"
+#endif
 		"\t-p -\tpassword\n"
 		"\t-r -\tresolution in dpi (default: 72)\n"
 		"\t-A\tdisable accelerated functions\n"
@@ -61,6 +68,7 @@ static void usage(void)
 		"\t-R -\trotate clockwise by given number of degrees\n"
 		"\t-G gamma\tgamma correct output\n"
 		"\t-I\tinvert output\n"
+		"\t-l\tprint outline\n"
 		"\tpages\tcomma separated list of ranges\n");
 	exit(1);
 }
@@ -89,6 +97,110 @@ static int isrange(char *s)
 	}
 	return 1;
 }
+
+#ifdef GDI_PLUS_BMP_RENDERER
+static void drawbmp(pdf_xref *xref, pdf_page *page, fz_display_list *list, int pagenum)
+{
+	float zoom;
+	fz_matrix ctm;
+	fz_bbox bbox;
+
+	int w, h;
+	fz_device *dev;
+	HDC hDC, hDCMain;
+	RECT rc;
+	HBRUSH bgBrush;
+	HBITMAP hbmp;
+	BITMAPINFO bmi = { 0 };
+	int bmpDataLen;
+	char *bmpData;
+
+	zoom = resolution / 72;
+	ctm = fz_translate(-page->mediabox.x0, -page->mediabox.y1);
+	ctm = fz_concat(ctm, fz_scale(zoom, -zoom));
+	ctm = fz_concat(ctm, fz_rotate(page->rotate));
+	bbox = fz_round_rect(fz_transform_rect(ctm, page->mediabox));
+
+	ctm = fz_concat(ctm, fz_translate(-bbox.x0, -bbox.y0));
+	w = bbox.x1 - bbox.x0;
+	h = bbox.y1 - bbox.y0;
+
+	hDCMain = GetDC(NULL);
+	hDC = CreateCompatibleDC(hDCMain);
+	hbmp = CreateCompatibleBitmap(hDCMain, w, h);
+	DeleteObject(SelectObject(hDC, hbmp));
+
+	SetRect(&rc, 0, 0, w, h);
+	bgBrush = CreateSolidBrush(RGB(0xFF,0xFF,0xFF));
+	FillRect(hDC, &rc, bgBrush);
+	DeleteObject(bgBrush);
+
+	bbox.x0 = 0; bbox.x1 = w;
+	bbox.y0 = 0; bbox.y1 = h;
+
+	dev = fz_new_gdiplus_device(xref->ctx, hDC, bbox);
+	if (list)
+		fz_execute_display_list(list, dev, ctm, bbox);
+	else
+		pdf_run_page(xref, page, dev, ctm);
+	fz_free_device(dev);
+
+	bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+	bmi.bmiHeader.biHeight = h;
+	bmi.bmiHeader.biWidth = w;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 24;
+	bmi.bmiHeader.biCompression = BI_RGB;
+
+	bmpDataLen = ((w * 3 + 3) / 4) * 4 * h;
+	bmpData = fz_malloc(xref->ctx, bmpDataLen);
+	if (!GetDIBits(hDC, hbmp, 0, h, bmpData, &bmi, DIB_RGB_COLORS))
+		die(xref->ctx, fz_error_make(xref->ctx, "gdierror: cannot draw page %d in PDF file '%s'", pagenum, filename));
+
+	DeleteDC(hDC);
+	ReleaseDC(NULL, hDCMain);
+	DeleteObject(hbmp);
+
+	if (output)
+	{
+		char buf[512];
+		int fd;
+		BITMAPFILEHEADER bmpfh = { 0 };
+
+		sprintf(buf, output, pagenum);
+		fd = open(buf, O_BINARY|O_WRONLY|O_CREAT|O_TRUNC, 0666);
+		if (fd < 0)
+			die(xref->ctx, fz_error_make(xref->ctx, "ioerror: could not create raster file '%s'", buf));
+
+		bmpfh.bfType = MAKEWORD('B', 'M');
+		bmpfh.bfOffBits = sizeof(bmpfh) + sizeof(bmi);
+		bmpfh.bfSize = bmpfh.bfOffBits + bmpDataLen;
+
+		write(fd, &bmpfh, sizeof(bmpfh));
+		write(fd, &bmi, sizeof(bmi));
+		write(fd, bmpData, bmpDataLen);
+
+		close(fd);
+	}
+
+	if (showmd5)
+	{
+		fz_md5 md5;
+		unsigned char digest[16];
+		int i;
+
+		fz_md5_init(&md5);
+		fz_md5_update(&md5, bmpData, bmpDataLen);
+		fz_md5_final(&md5, digest);
+
+		printf(" ");
+		for (i = 0; i < 16; i++)
+			printf("%02x", digest[i]);
+	}
+
+	fz_free(xref->ctx, bmpData);
+}
+#endif
 
 static void drawpage(pdf_xref *xref, int pagenum)
 {
@@ -153,6 +265,11 @@ static void drawpage(pdf_xref *xref, int pagenum)
 	if (showmd5 || showtime)
 		printf("page %s %d", filename, pagenum);
 
+#ifdef GDI_PLUS_BMP_RENDERER
+	if (output && strstr(output, ".bmp"))
+		drawbmp(xref, page, list, pagenum);
+	else
+#endif
 	if (output || showmd5 || showtime)
 	{
 		float zoom;
@@ -187,6 +304,9 @@ static void drawpage(pdf_xref *xref, int pagenum)
 			fz_invert_pixmap(pix);
 		if (gamma_value != 1)
 			fz_gamma_pixmap(pix, gamma_value);
+
+		if (savealpha)
+			fz_unmultiply_pixmap(pix);
 
 		if (output)
 		{
@@ -296,6 +416,16 @@ static void drawrange(pdf_xref *xref, char *range)
 	}
 }
 
+static void drawoutline(pdf_xref *xref)
+{
+	fz_outline *outline = pdf_load_outline(xref);
+	if (showoutline > 1)
+		fz_debug_outline_xml(outline, 0);
+	else
+		fz_debug_outline(outline, 0);
+	fz_free_outline(xref->ctx, outline);
+}
+
 int main(int argc, char **argv)
 {
 	char *password = "";
@@ -306,7 +436,7 @@ int main(int argc, char **argv)
 	int c;
 	fz_context *ctx;
 
-	while ((c = fz_getopt(argc, argv, "o:p:r:R:Aab:dgmtx5G:I")) != -1)
+	while ((c = fz_getopt(argc, argv, "lo:p:r:R:Aab:dgmtx5G:I")) != -1)
 	{
 		switch (c)
 		{
@@ -317,6 +447,7 @@ int main(int argc, char **argv)
 		case 'A': accelerate = 0; break;
 		case 'a': savealpha = 1; break;
 		case 'b': alphabits = atoi(fz_optarg); break;
+		case 'l': showoutline++; break;
 		case 'm': showtime++; break;
 		case 't': showtext++; break;
 		case 'x': showxml++; break;
@@ -332,7 +463,7 @@ int main(int argc, char **argv)
 	if (fz_optind == argc)
 		usage();
 
-	if (!showtext && !showxml && !showtime && !showmd5 && !output)
+	if (!showtext && !showxml && !showtime && !showmd5 && !showoutline && !output)
 	{
 		printf("nothing to do\n");
 		exit(0);
@@ -387,10 +518,16 @@ int main(int argc, char **argv)
 		if (showxml)
 			printf("<document name=\"%s\">\n", filename);
 
-		if (fz_optind == argc || !isrange(argv[fz_optind]))
-			drawrange(xref, "1-");
-		if (fz_optind < argc && isrange(argv[fz_optind]))
-			drawrange(xref, argv[fz_optind++]);
+		if (showoutline)
+			drawoutline(xref);
+
+		if (showtext || showxml || showtime || showmd5 || output)
+		{
+			if (fz_optind == argc || !isrange(argv[fz_optind]))
+				drawrange(xref, "1-");
+			if (fz_optind < argc && isrange(argv[fz_optind]))
+				drawrange(xref, argv[fz_optind++]);
+		}
 
 		if (showxml)
 			printf("</document>\n");

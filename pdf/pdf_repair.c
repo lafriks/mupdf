@@ -36,8 +36,14 @@ pdf_repair_obj(fz_stream *file, char *buf, int cap, int *stmofsp, int *stmlenp, 
 
 		/* Send NULL xref so we don't try to resolve references */
 		error = pdf_parse_dict(&dict, NULL, file, buf, cap);
+		/* SumatraPDF: don't let a broken object at EOF overwrite a non-broken one */
+		if (error && file->eof)
+			return fz_error_note(ctx, error, "broken object at EOF ignored");
 		if (error)
-			return fz_error_note(ctx, error, "cannot parse object");
+		{
+			fz_error_handle(ctx, error, "cannot parse object, proceeding anyway");
+			dict = fz_new_dict(ctx, 2);
+		}
 
 		obj = fz_dict_gets(ctx, dict, "Type");
 		if (fz_is_name(ctx, obj) && !strcmp(fz_to_name(ctx, obj), "XRef"))
@@ -66,27 +72,23 @@ pdf_repair_obj(fz_stream *file, char *buf, int cap, int *stmofsp, int *stmlenp, 
 		fz_drop_obj(ctx, dict);
 	}
 
-	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692424
 	while ( tok != PDF_TOK_STREAM &&
 		tok != PDF_TOK_ENDOBJ &&
 		tok != PDF_TOK_ERROR &&
-		tok != PDF_TOK_EOF )
+		tok != PDF_TOK_EOF &&
+		tok != PDF_TOK_INT )
 	{
 		error = pdf_lex(&tok, file, buf, cap, &len);
 		if (error)
 			return fz_error_note(ctx, error, "cannot scan for endobj or stream token");
 	}
-	*/
-	error = pdf_lex(&tok, file, buf, cap, &len);
-	if (error)
-		return fz_error_note(ctx, error, "cannot scan for endobj or stream token");
-	if (tok != PDF_TOK_STREAM && tok != PDF_TOK_ENDOBJ && tok != PDF_TOK_ERROR && tok != PDF_TOK_EOF)
+
+	if (tok == PDF_TOK_INT)
 	{
 		while (len-- > 0)
 			fz_unread_byte(file);
 	}
-	else
-	if (tok == PDF_TOK_STREAM)
+	else if (tok == PDF_TOK_STREAM)
 	{
 		int c = fz_read_byte(file);
 		if (c == '\r') {
@@ -481,7 +483,13 @@ pdf_repair_obj_stms(pdf_xref *xref)
 	{
 		if (xref->table[i].stm_ofs)
 		{
-			pdf_load_object(&dict, xref, i, 0);
+			/* SumatraPDF: always check error codes */
+			fz_error error = pdf_load_object(&dict, xref, i, 0);
+			if (error)
+			{
+				fz_error_handle(ctx, error, "this shouldn't have happened (%d 0 R)!", i);
+				continue;
+			}
 			if (!strcmp(fz_to_name(ctx, fz_dict_gets(ctx, dict, "Type")), "ObjStm"))
 				pdf_repair_obj_stm(xref, i, 0);
 			fz_drop_obj(ctx, dict);

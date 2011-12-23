@@ -121,10 +121,11 @@ fz_drop_font(fz_context *ctx, fz_font *font)
 void
 fz_set_font_bbox(fz_font *font, float xmin, float ymin, float xmax, float ymax)
 {
-	font->bbox.x0 = xmin;
-	font->bbox.y0 = ymin;
-	font->bbox.x1 = xmax;
-	font->bbox.y1 = ymax;
+	/* SumatraPDF: the font bbox is assumed to be premultiplied with 1000 */
+	font->bbox.x0 = xmin * 1000;
+	font->bbox.y0 = ymin * 1000;
+	font->bbox.x1 = xmax * 1000;
+	font->bbox.y1 = ymax * 1000;
 }
 
 /*
@@ -217,6 +218,17 @@ fz_check_font_dimensions(FT_Face face)
 		face->bbox.yMax = face->units_per_EM;
 		face->ascender = face->units_per_EM;
 	}
+
+	/* use default values for fonts with an empty glyph bbox */
+	if (face->bbox.xMin == 0 && face->bbox.yMin == 0 &&
+		face->bbox.xMax == 0 && face->bbox.yMax == 0 &&
+		face->ascender == 0 && face->descender == 0)
+	{
+		face->bbox.xMax = face->units_per_EM;
+		face->bbox.yMax = face->units_per_EM;
+		face->ascender = 0.8f * face->units_per_EM;
+		face->descender = -0.2f * face->units_per_EM;
+	}
 }
 
 fz_error
@@ -233,7 +245,10 @@ fz_new_font_from_file(fz_context *ctx, fz_font **fontp, char *path, int index)
 
 	fterr = FT_New_Face(ctx->ft->ftlib, path, index, &face);
 	if (fterr)
+	{
+		fz_finalize_freetype(ctx); /* SumatraPDF: fix memory leak */
 		return fz_error_make(ctx, "freetype: cannot load font: %s", ft_error_string(fterr));
+}
 	fz_check_font_dimensions(face);
 
 	font = fz_new_font(ctx, face->family_name);
@@ -261,7 +276,10 @@ fz_new_font_from_memory(fz_context *ctx, fz_font **fontp, unsigned char *data, i
 
 	fterr = FT_New_Memory_Face(ctx->ft->ftlib, data, len, index, &face);
 	if (fterr)
+	{
+		fz_finalize_freetype(ctx); /* SumatraPDF: fix memory leak */
 		return fz_error_make(ctx, "freetype: cannot load font: %s", ft_error_string(fterr));
+	}
 	fz_check_font_dimensions(face);
 
 	font = fz_new_font(ctx, face->family_name);

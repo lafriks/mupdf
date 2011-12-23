@@ -413,7 +413,7 @@ png_read_image(struct info *info, unsigned char *p, int total)
 
 	stm.zalloc = zalloc;
 	stm.zfree = zfree;
-	stm.opaque = info->ctx;
+	stm.opaque = NULL;
 
 	stm.next_out = info->samples;
 	stm.avail_out = info->size;
@@ -530,6 +530,8 @@ png_mask_transparency(struct info *info, fz_pixmap *dst)
 				dp[x * dst->n + dst->n - 1] = 0;
 		}
 	}
+
+	dst->has_alpha = 1; /* SumatraPDF: allow optimizing non-alpha pixmaps */
 }
 
 int

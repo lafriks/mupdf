@@ -3,8 +3,9 @@
 static int fz_memory_limit = 256 << 20;
 static int fz_memory_used = 0;
 
-fz_pixmap *
-fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h, unsigned char *samples)
+/* SumatraPDF: allow memory allocation to fail */
+static fz_pixmap *
+fz_new_pixmap_with_data2(fz_context *ctx, fz_colorspace *colorspace, int w, int h, unsigned char *samples, int abort_on_oom)
 {
 	fz_pixmap *pix;
 
@@ -20,6 +21,7 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 	pix->yres = 96;
 	pix->colorspace = NULL;
 	pix->n = 1;
+	pix->has_alpha = 1; /* SumatraPDF: allow optimizing non-alpha pixmaps */
 
 	if (colorspace)
 	{
@@ -35,13 +37,31 @@ fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h
 	else
 	{
 		/* SumatraPDF: abort on integer overflow */
-		if (pix->w > INT_MAX / pix->n) abort();
+		if (pix->w > INT_MAX / pix->n) fz_calloc(ctx, -1, -1);
+		/* SumatraPDF: allow memory allocation to fail */
+		pix->samples = fz_calloc_no_abort(ctx, pix->h, pix->w * pix->n);
+		if (!pix->samples && abort_on_oom)
+			pix->samples = fz_calloc(ctx, pix->h, pix->w * pix->n);
+		else if (!pix->samples)
+		{
+			if (pix->colorspace)
+				fz_drop_colorspace(ctx, pix->colorspace);
+			fz_free(ctx, pix);
+			return NULL;
+		}
+		fz_synchronize_begin();
 		fz_memory_used += pix->w * pix->h * pix->n;
-		pix->samples = fz_calloc(ctx, pix->h, pix->w * pix->n);
+		fz_synchronize_end();
 		pix->free_samples = 1;
 	}
 
 	return pix;
+}
+
+fz_pixmap *
+fz_new_pixmap_with_data(fz_context *ctx, fz_colorspace *colorspace, int w, int h, unsigned char *samples)
+{
+	return fz_new_pixmap_with_data2(ctx, colorspace, w, h, samples, 1);
 }
 
 fz_pixmap *
@@ -223,6 +243,26 @@ fz_premultiply_pixmap(fz_pixmap *pix)
 			a = s[pix->n - 1];
 			for (k = 0; k < pix->n - 1; k++)
 				s[k] = fz_mul255(s[k], a);
+			s += pix->n;
+		}
+	}
+}
+
+void
+fz_unmultiply_pixmap(fz_pixmap *pix)
+{
+	unsigned char *s = pix->samples;
+	int a, inva;
+	int k, x, y;
+
+	for (y = 0; y < pix->h; y++)
+	{
+		for (x = 0; x < pix->w; x++)
+		{
+			a = s[pix->n - 1];
+			inva = a ? 255 * 256 / a : 0;
+			for (k = 0; k < pix->n - 1; k++)
+				s[k] = (s[k] * inva) >> 8;
 			s += pix->n;
 		}
 	}

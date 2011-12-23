@@ -54,6 +54,7 @@ fz_unpack_tile(fz_pixmap *dst, unsigned char * restrict src, int n, int depth, i
 	pad = 0;
 	if (dst->n > n)
 		pad = 255;
+	dst->has_alpha = !pad; /* SumatraPDF: allow optimizing non-alpha pixmaps */
 
 	if (depth == 1)
 		init_get1_tables();
@@ -197,7 +198,12 @@ fz_decode_indexed_tile(fz_pixmap *pix, float *decode, int maxval)
 	while (len--)
 	{
 		for (k = 0; k < n; k++)
-			p[k] = (add[k] + (((p[k] << 8) * mul[k]) >> 8)) >> 8;
+		{
+			/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=1650 */
+			/* TODO: this doesn't always result in the same values as for Adobe Reader */
+			int value = (add[k] + (((p[k] << 8) * mul[k]) >> 8)) >> 8;
+			p[k] = CLAMP(value, 0, 255);
+		}
 		p += n + 1;
 	}
 }
@@ -229,7 +235,11 @@ fz_decode_tile(fz_pixmap *pix, float *decode)
 	while (len--)
 	{
 		for (k = 0; k < n; k++)
-			p[k] = add[k] + fz_mul255(p[k], mul[k]);
+		{
+			/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=1650 */
+			int value = add[k] + fz_mul255(p[k], mul[k]);
+			p[k] = CLAMP(value, 0, 255);
+		}
 		p += pix->n;
 	}
 }

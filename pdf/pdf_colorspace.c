@@ -230,7 +230,8 @@ load_indexed(fz_colorspace **csp, pdf_xref *xref, fz_obj *array)
 	idx->high = fz_to_int(ctx, highobj);
 	idx->high = CLAMP(idx->high, 0, 255);
 	n = base->n * (idx->high + 1);
-	idx->lookup = fz_calloc(ctx, 1, n);
+	idx->lookup = fz_malloc(ctx, n);
+	memset(idx->lookup, 0, n);
 
 	cs = fz_new_colorspace(ctx, "Indexed", 1);
 	cs->to_rgb = indexed_to_rgb;
@@ -375,7 +376,7 @@ pdf_load_colorspace(fz_colorspace **csp, pdf_xref *xref, fz_obj *obj)
 	fz_error error;
 	fz_context *ctx = xref->ctx;
 
-	if ((*csp = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)fz_drop_colorspace, obj)))
+	if ((*csp = pdf_find_item(ctx, xref->store, fz_drop_colorspace, obj)))
 	{
 		fz_keep_colorspace(*csp);
 		return fz_okay;
@@ -385,7 +386,7 @@ pdf_load_colorspace(fz_colorspace **csp, pdf_xref *xref, fz_obj *obj)
 	if (error)
 		return fz_error_note(ctx, error, "cannot load colorspace (%d %d R)", fz_to_num(obj), fz_to_gen(obj));
 
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)fz_keep_colorspace, (pdf_store_drop_fn *)fz_drop_colorspace, obj, *csp);
+	pdf_store_item(ctx, xref->store, fz_keep_colorspace, fz_drop_colorspace, obj, *csp);
 
 	return fz_okay;
 }

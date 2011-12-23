@@ -62,18 +62,12 @@ static void sweepobj(fz_obj *obj)
 		sweepref(obj);
 
 	else if (fz_is_dict(ctx, obj))
-	{
-		int n = fz_dict_len(ctx, obj);
-		for (i = 0; i < n; i++)
+		for (i = 0; i < fz_dict_len(ctx, obj); i++)
 			sweepobj(fz_dict_get_val(ctx, obj, i));
-	}
 
 	else if (fz_is_array(ctx, obj))
-	{
-		int n = fz_array_len(ctx, obj);
-		for (i = 0; i < n; i++)
+		for (i = 0; i < fz_array_len(ctx, obj); i++)
 			sweepobj(fz_array_get(ctx, obj, i));
-	}
 }
 
 static void sweepref(fz_obj *obj)
@@ -187,8 +181,7 @@ static void renumberobj(fz_obj *obj)
 
 	if (fz_is_dict(ctx, obj))
 	{
-		int n = fz_dict_len(ctx, obj);
-		for (i = 0; i < n; i++)
+		for (i = 0; i < fz_dict_len(ctx, obj); i++)
 		{
 			fz_obj *key = fz_dict_get_key(ctx, obj, i);
 			fz_obj *val = fz_dict_get_val(ctx, obj, i);
@@ -207,8 +200,7 @@ static void renumberobj(fz_obj *obj)
 
 	else if (fz_is_array(ctx, obj))
 	{
-		int n = fz_array_len(ctx, obj);
-		for (i = 0; i < n; i++)
+		for (i = 0; i < fz_array_len(ctx, obj); i++)
 		{
 			fz_obj *val = fz_array_get(ctx, obj, i);
 			if (fz_is_indirect(val))
@@ -288,16 +280,18 @@ static void renumberobjs(void)
 static void retainpages(int argc, char **argv)
 {
 	fz_error error;
-	fz_obj *oldroot, *root, *pages, *kids, *countobj, *parent;
+	fz_obj *oldroot, *root, *pages, *kids, *countobj, *parent, *olddests;
 
 	/* Load the old page tree */
 	error = pdf_load_page_tree(xref);
 	if (error)
 		die(fz_error_note(ctx, error, "cannot load page tree"));
 
-	/* Keep only pages/type entry to avoid references to unretained pages */
+	/* Keep only pages/type and (reduced) dest entries to avoid
+	 * references to unretained pages */
 	oldroot = fz_dict_gets(ctx, xref->trailer, "Root");
 	pages = fz_dict_gets(ctx, oldroot, "Pages");
+	olddests = pdf_load_name_tree(xref, "Dests");
 
 	root = fz_new_dict(ctx, 2);
 	fz_dict_puts(ctx, root, "Type", fz_dict_gets(ctx, oldroot, "Type"));
@@ -369,6 +363,41 @@ static void retainpages(int argc, char **argv)
 	fz_drop_obj(ctx, countobj);
 	fz_dict_puts(ctx, pages, "Kids", kids);
 	fz_drop_obj(ctx, kids);
+
+	/* Also preserve the (partial) Dests name tree */
+	if (olddests)
+	{
+		int i;
+		fz_obj *names = fz_new_dict(ctx, 1);
+		fz_obj *dests = fz_new_dict(ctx, 1);
+		fz_obj *names_list = fz_new_array(ctx, 32);
+
+		for (i = 0; i < fz_dict_len(ctx, olddests); i++)
+		{
+			fz_obj *key = fz_dict_get_key(ctx, olddests, i);
+			fz_obj *val = fz_dict_get_val(ctx, olddests, i);
+			fz_obj *key_str = fz_new_string(ctx, fz_to_name(ctx, key), strlen(fz_to_name(ctx, key)));
+			fz_obj *dest = fz_dict_gets(ctx, val, "D");
+
+			dest = fz_array_get(ctx, dest ? dest : val, 0);
+			if (fz_array_contains(ctx, fz_dict_gets(ctx, pages, "Kids"), dest))
+			{
+				fz_array_push(ctx, names_list, key_str);
+				fz_array_push(ctx, names_list, val);
+			}
+			fz_drop_obj(ctx, key_str);
+		}
+
+		root = fz_dict_gets(ctx, xref->trailer, "Root");
+		fz_dict_puts(ctx, dests, "Names", names_list);
+		fz_dict_puts(ctx, names, "Dests", dests);
+		fz_dict_puts(ctx, root, "Names", names);
+
+		fz_drop_obj(ctx, names);
+		fz_drop_obj(ctx, dests);
+		fz_drop_obj(ctx, names_list);
+		fz_drop_obj(ctx, olddests);
+	}
 }
 
 /*
@@ -768,7 +797,10 @@ int main(int argc, char **argv)
 		compactxref();
 
 	/* Make renumbering affect all indirect references and update xref */
-	if (dogarbage >= 2)
+	/* Do not renumber objects if encryption is in use, as the object
+	 * numbers are baked into the streams/strings, and we can't currently
+	 * cope with moving them. See bug 692627. */
+	if (dogarbage >= 2 && xref->crypt == NULL)
 		renumberobjs();
 
 	writepdf();

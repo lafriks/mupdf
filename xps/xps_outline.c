@@ -1,374 +1,210 @@
-/* SumatraPDF: support links and outlines */
-
 #include "fitz.h"
 #include "muxps.h"
 
-static xps_outline *
-xps_new_outline(fz_context *ctx, char *title, char *target)
-{
-	xps_outline *outline = fz_malloc(ctx, sizeof(xps_outline));
+/*
+ * Parse the document structure / outline parts referenced from fixdoc relationships.
+ */
 
-	outline->title = fz_strdup(ctx, title);
-	outline->target = fz_strdup(ctx, target);
-	outline->next = NULL;
-	outline->child = NULL;
+static fz_outline *
+xps_find_last_outline_at_level(fz_outline *node, int level, int target_level)
+{
+	while (node->next)
+		node = node->next;
+	if (level == target_level || !node->down)
+		return node;
+	return xps_find_last_outline_at_level(node->down, level + 1, target_level);
+}
+
+/* SumatraPDF: extended outline actions */
+#define isprotc(c) (('A' <= (c) && (c) <= 'Z') || ('a' <= (c) && (c) <= 'z') || (c) == '-')
+
+static int
+xps_is_external_uri(char *path)
+{
+	char *c;
+	for (c = path; isprotc(*c); c++);
+	return c > path && *c == ':';
+}
+
+static fz_outline *
+xps_parse_document_outline(xps_context *ctx, xml_element *root)
+{
+	xml_element *node;
+	fz_outline *head = NULL, *entry, *tail;
+	int last_level = 1, this_level;
+	for (node = xml_down(root); node; node = xml_next(node))
+	{
+		if (!strcmp(xml_tag(node), "OutlineEntry"))
+		{
+			char *level = xml_att(node, "OutlineLevel");
+			char *target = xml_att(node, "OutlineTarget");
+			char *description = xml_att(node, "Description");
+			/* SumatraPDF: allow target-less outline entries */
+			if (!description)
+				continue;
+
+			entry = fz_malloc(ctx->ctx, sizeof *entry);
+			entry->title = fz_strdup(ctx->ctx, description);
+			entry->page = -1;
+			/* SumatraPDF: extended outline actions */
+			entry->data = target ? fz_strdup(ctx->ctx, target) : NULL;
+			if (target && !xps_is_external_uri(target))
+				entry->page = xps_find_link_target(ctx, target);
+			entry->free_data = fz_free;
+			entry->down = NULL;
+			entry->next = NULL;
+
+			this_level = level ? atoi(level) : 1;
+			entry->is_open = this_level == 1; /* SumatraPDF: support expansion states */
+
+			if (!head)
+{
+				head = entry;
+}
+			else
+{
+				tail = xps_find_last_outline_at_level(head, 1, this_level);
+				if (this_level > last_level)
+					tail->down = entry;
+				else
+					tail->next = entry;
+}
+
+			last_level = this_level;
+}
+}
+	return head;
+}
+
+static fz_outline *
+xps_parse_document_structure(xps_context *ctx, xml_element *root)
+{
+	xml_element *node;
+	if (!strcmp(xml_tag(root), "DocumentStructure"))
+{
+		node = xml_down(root);
+		if (!strcmp(xml_tag(node), "DocumentStructure.Outline"))
+	{
+			node = xml_down(node);
+			if (!strcmp(xml_tag(node), "DocumentOutline"))
+				return xps_parse_document_outline(ctx, node);
+	}
+}
+	return NULL;
+}
+
+static fz_outline *
+xps_load_document_structure(xps_context *ctx, xps_document *fixdoc)
+{
+	xps_part *part;
+	xml_element *root;
+	fz_outline *outline;
+
+	part = xps_read_part(ctx, fixdoc->outline);
+	if (!part)
+		return NULL;
+
+	root = xml_parse_document(ctx->ctx, part->data, part->size);
+	if (!root) {
+		fz_error_handle(ctx->ctx, -1, "cannot parse document structure part '%s'", part->name);
+		xps_free_part(ctx, part);
+		return NULL;
+	}
+
+	outline = xps_parse_document_structure(ctx, root);
+
+	xml_free_element(ctx->ctx, root);
+	xps_free_part(ctx, part);
 
 	return outline;
+
 }
 
-static xps_named_dest *
-xps_new_named_dest(fz_context *ctx, char *target, int page)
+fz_outline *
+xps_load_outline(xps_context *ctx)
 {
-	xps_named_dest *dest = fz_malloc(ctx, sizeof(xps_named_dest));
+	xps_document *fixdoc;
+	fz_outline *head = NULL, *tail, *outline;
 
-	dest->target = fz_strdup(ctx, target);
-	dest->page = page;
-	dest->rect = fz_empty_rect; // to be updated
-	dest->next = NULL;
-
-	return dest;
+	for (fixdoc = ctx->first_fixdoc; fixdoc; fixdoc = fixdoc->next) {
+		if (fixdoc->outline) {
+			outline = xps_load_document_structure(ctx, fixdoc);
+			if (outline) {
+				/* SumatraPDF: don't overwrite outline entries */
+				if (head) while (tail->next) tail = tail->next;
+				if (!head)
+					head = outline;
+			else
+					tail->next = outline;
+				tail = outline;
+			}
+		}
+	}
+	return head;
 }
 
-static xps_link *
-xps_new_link(fz_context *ctx, char *target, fz_rect rect, int is_dest)
+/* SumatraPDF: extended link support */
+
+void
+xps_free_anchor(fz_context *ctx, xps_anchor *link)
 {
-	xps_link *link = fz_malloc(ctx, sizeof(xps_link));
-
-	link->target = fz_strdup(ctx, target);
-	link->rect = rect;
-	link->is_dest = is_dest;
-	link->next = NULL;
-
-	return link;
+	while (link)
+	{
+		xps_anchor *next = link->next;
+		fz_free(ctx, link->target);
+		fz_free(ctx, link);
+		link = next;
+	}
 }
 
 void
-xps_free_outline(fz_context *ctx, xps_outline *outline)
+xps_extract_anchor_info(xps_context *ctx, xml_element *node, fz_rect rect)
 {
-	if (outline->child)
-		xps_free_outline(ctx, outline->child);
-	if (outline->next)
-		xps_free_outline(ctx, outline->next);
-	fz_free(ctx, outline->title);
-	fz_free(ctx, outline->target);
-	fz_free(ctx, outline);
+	char *value;
+
+	if (ctx->link_root && (value = xml_att(node, "FixedPage.NavigateUri")))
+	{
+		xps_anchor *link = fz_malloc(ctx->ctx, sizeof(xps_anchor));
+		link->target = fz_strdup(ctx->ctx, value);
+		link->rect = rect;
+		// insert the links in bottom-to-top order (first one is to be preferred)
+		link->next = ctx->link_root->next;
+		ctx->link_root->next = link;
+	}
+
+	if ((value = xml_att(node, "Name")))
+	{
+		xps_target *target;
+		char *valueId = fz_malloc(ctx->ctx, strlen(value) + 2);
+		sprintf(valueId, "#%s", value);
+		target = xps_find_link_target_obj(ctx, valueId);
+		if (target)
+			target->rect = rect;
+		fz_free(ctx->ctx, valueId);
+	}
 }
 
-void
-xps_free_named_dest(fz_context *ctx, xps_named_dest *dest)
-{
-	if (dest->next)
-		xps_free_named_dest(ctx, dest->next);
-	fz_free(ctx, dest->target);
-	fz_free(ctx, dest);
-}
-
-void
-xps_free_link(fz_context *ctx, xps_link *link)
-{
-	if (link->next)
-		xps_free_link(ctx, link->next);
-	fz_free(ctx, link->target);
-	fz_free(ctx, link);
-}
-
-static char *
-xps_get_part_base_name(char *name)
-{
-	char *baseName = strrchr(name, '/');
-	if (!baseName)
-		baseName = name;
-	return baseName + 1;
-}
-
-static void
-xps_rels_for_part(char *buf, char *name, int bufSize)
-{
-	char *baseName = xps_get_part_base_name(name);
-	fz_strlcpy(buf, name, MIN(baseName - name + 1, bufSize));
-	fz_strlcat(buf, "_rels/", bufSize);
-	fz_strlcat(buf, baseName, bufSize);
-	fz_strlcat(buf, ".rels", bufSize);
-}
+/* SumatraPDF: extract document properties (hacky) */
 
 static int
 xps_open_and_parse(xps_context *ctx, char *path, xml_element **rootp)
 {
 	xps_part *part = xps_read_part(ctx, path);
 	if (!part)
-		return fz_error_note(ctx->ctx, -1, "cannot read zip part '%s'", path);
+		return fz_error_note(ctx->ctx, -1, "cannot read part '%s'", path);
 
 	*rootp = xml_parse_document(ctx->ctx, part->data, part->size);
 	xps_free_part(ctx, part);
 
 	if (!*rootp)
-		return fz_error_note(ctx->ctx, -1, "cannot parse metadata for part '%s'", path);
+		return fz_error_note(ctx->ctx, -1, "cannot parse part '%s'", path);
 	return fz_okay;
 }
-
-static xps_outline *
-xps_get_insertion_point(xps_outline *root, int level)
-{
-	for (; root->next; root = root->next);
-	if (level == 0 || !root->child)
-		return root;
-	return xps_get_insertion_point(root->child, level - 1);
-}
-
-// <DocumentStructure xmlns="http://schemas.microsoft.com/xps/2005/06/documentstructure">
-//     <DocumentStructure.Outline>
-//         <DocumentOutline xml:lang="en-US">
-//             <OutlineEntry OutlineLevel="1"
-//                           Description="XML Paper Specification"
-//                           OutlineTarget="../FixedDoc.fdoc#PG_1_LNK_1812" />
-//         </DocumentOutline>
-//     </DocumentStructure.Outline>
-// </DocumentStructure>
-
-static void
-xps_parse_outline_imp(fz_context *ctx, xps_outline **outlinep, xml_element *item, char *base_uri)
-{
-	int lastLevel = 0;
-	for (; item; item = xml_next(item))
-	{
-		char *description, *target;
-		int level;
-		char tgtbuf[1024];
-		xps_outline *outline;
-
-		xps_parse_outline_imp(ctx, outlinep, xml_down(item), base_uri);
-
-		if (strcmp(xml_tag(item), "OutlineEntry") != 0 ||
-			!(description = xml_att(item, "Description")) ||
-			!(target = xml_att(item, "OutlineTarget")))
-			continue;
-		if (xml_att(item, "OutlineLevel"))
-			level = atoi(xml_att(item, "OutlineLevel"));
-		else
-			level = lastLevel;
-
-		xps_absolute_path(tgtbuf, base_uri, target, sizeof(tgtbuf));
-		outline = xps_new_outline(ctx, description, tgtbuf);
-		if (!*outlinep)
-			*outlinep = outline;
-		else if (level > lastLevel)
-			xps_get_insertion_point(*outlinep, lastLevel)->child = outline;
-		else
-			xps_get_insertion_point(*outlinep, level)->next = outline;
-		lastLevel = level;
-	}
-}
-
-static int
-xps_parse_outline_structure(xps_outline **outlinep, xps_context *ctx, char *name)
-{
-	char base_uri[1024];
-	xml_element *root;
-
-	int code = xps_open_and_parse(ctx, name, &root);
-	if (code != fz_okay)
-		return code;
-
-	fz_strlcpy(base_uri, name, sizeof(base_uri));
-	*(xps_get_part_base_name(base_uri) - 1) = '\0';
-
-	xps_parse_outline_imp(ctx->ctx, outlinep, root, base_uri);
-
-	xml_free_element(ctx->ctx, root);
-
-	return fz_okay;
-}
-
-// <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-//     <Relationship Type="http://schemas.microsoft.com/xps/2005/06/documentstructure"
-//                   Target="Structure/DocStructure.struct"/>
-// </Relationships>
-
-#define REL_DOC_STRUCTURE \
-	"http://schemas.microsoft.com/xps/2005/06/documentstructure"
-
-static int
-xps_read_and_process_document_outline(xps_outline **outlinep, xps_context *ctx, xps_document *doc)
-{
-	char base_uri[1024];
-	xml_element *root;
-	xml_element *item;
-	int code = fz_okay;
-
-	xps_rels_for_part(base_uri, doc->name, sizeof(base_uri));
-
-	code = xps_open_and_parse(ctx, base_uri, &root);
-	if (code != fz_okay)
-		return code;
-	*strstr(base_uri, "/_rels/") = '\0';
-
-	for (item = root; item; item = xml_next(item))
-	{
-		xml_element *relItem;
-		if (strcmp(xml_tag(item), "Relationships") != 0)
-			continue;
-		for (relItem = xml_down(item); relItem; relItem = xml_next(relItem))
-		{
-			char *target, *type;
-			if (!strcmp(xml_tag(relItem), "Relationship") &&
-				(target = xml_att(relItem, "Target")) && (type = xml_att(relItem, "Type")) &&
-				!strcmp(type, REL_DOC_STRUCTURE))
-			{
-				char tgtbuf[1024];
-				xps_absolute_path(tgtbuf, base_uri, target, sizeof(tgtbuf));
-				code = xps_parse_outline_structure(outlinep, ctx, tgtbuf);
-			}
-		}
-	}
-
-	xml_free_element(ctx->ctx, root);
-
-	return code;
-}
-
-xps_outline *
-xps_parse_outline(xps_context *ctx)
-{
-	xps_outline *root = NULL;
-	xps_outline **next = &root;
-	xps_document *doc;
-
-	for (doc = ctx->first_fixdoc; doc; doc = doc->next)
-	{
-		int code = xps_read_and_process_document_outline(next, ctx, doc);
-		if (code)
-			fz_error_handle(ctx->ctx, code, "couldn't read the outline for part '%s'", doc->name);
-		if (*next)
-			next = &(*next)->next;
-	}
-
-	return root;
-}
-
-// <FixedDocument xmlns="http://schemas.microsoft.com/xps/2005/06">
-//     <PageContent Source="Pages/1.fpage">
-//         <PageContent.LinkTargets>
-//             <LinkTarget Name="PG_1_LNK_1812"/>
-//         </PageContent.LinkTargets>
-//     </PageContent>
-// </FixedDocument>
-
-static void
-xps_parse_names_imp(xps_named_dest **destsp, xps_context *ctx, xps_document *doc, xml_element *item, char *base_uri, int page)
-{
-	char tgtbuf[1024];
-
-	for (; item; item = xml_next(item))
-	{
-		if (!strcmp(xml_tag(item), "PageContent") && xml_att(item, "Source") && page == 0)
-		{
-			int i;
-			xps_page *page;
-			xps_absolute_path(tgtbuf, base_uri, xml_att(item, "Source"), sizeof(tgtbuf));
-			for (page = ctx->first_page, i = 0; page; page = page->next, i++)
-			{
-				if (strcmp(page->name, tgtbuf) != 0)
-					continue;
-				xps_parse_names_imp(destsp, ctx, doc, xml_down(item), base_uri, i + 1);
-				break;
-			}
-		}
-		else if (!strcmp(xml_tag(item), "LinkTarget") && xml_att(item, "Name") && page != 0)
-		{
-			xps_named_dest *dest;
-			fz_strlcpy(tgtbuf, doc->name, sizeof(tgtbuf));
-			fz_strlcat(tgtbuf, "#", sizeof(tgtbuf));
-			fz_strlcat(tgtbuf, xml_att(item, "Name"), sizeof(tgtbuf));
-			dest = xps_new_named_dest(ctx->ctx, tgtbuf, page);
-			if (!*destsp)
-				*destsp = dest;
-			else
-			{
-				xps_named_dest *next;
-				for (next = *destsp; next->next; next = next->next);
-				next->next = dest;
-			}
-		}
-		else
-			xps_parse_names_imp(destsp, ctx, doc, xml_down(item), base_uri, page);
-	}
-}
-
-static int
-xps_read_and_process_dest_names(xps_named_dest **destsp, xps_context *ctx, xps_document *doc)
-{
-	char base_uri[1024];
-	xml_element *root;
-
-	int code = xps_open_and_parse(ctx, doc->name, &root);
-	if (code != fz_okay)
-		return code;
-
-	fz_strlcpy(base_uri, doc->name, sizeof(base_uri));
-	*(xps_get_part_base_name(base_uri) - 1) = '\0';
-
-	xps_parse_names_imp(destsp, ctx, doc, root, base_uri, 0);
-
-	xml_free_element(ctx->ctx, root);
-
-	return fz_okay;
-}
-
-xps_named_dest *
-xps_parse_named_dests(xps_context *ctx)
-{
-	xps_named_dest *root = NULL;
-	xps_named_dest **next = &root;
-	xps_document *doc;
-
-	for (doc = ctx->first_fixdoc; doc; doc = doc->next)
-	{
-		int code = xps_read_and_process_dest_names(next, ctx, doc);
-		if (code)
-			fz_error_handle(ctx->ctx, code, "couldn't read the destination names for part '%s'", doc->name);
-		if (*next)
-			next = &(*next)->next;
-	}
-
-	return root;
-}
-
-void
-xps_extract_link_info(xps_context *ctx, xml_element *node, fz_rect rect, char *base_uri)
-{
-	xps_link *link = NULL;
-	char *value;
-
-	if (!ctx->link_root)
-		return;
-
-	if ((value = xml_att(node, "FixedPage.NavigateUri")) && !strchr(value, ':'))
-	{
-		char tgtbuf[1024];
-		xps_absolute_path(tgtbuf, base_uri, value, sizeof(tgtbuf));
-		link = xps_new_link(ctx->ctx, tgtbuf, rect, 0);
-	}
-	else if (value) // link with a protocol (e.g. http://...)
-		link = xps_new_link(ctx->ctx, value, rect, 0);
-	else if ((value = xml_att(node, "Name")))
-		link = xps_new_link(ctx->ctx, value, rect, 1);
-
-	// insert the links in top-to-bottom order (first one is to be preferred)
-	if (link)
-	{
-		link->next = ctx->link_root->next;
-		ctx->link_root->next = link;
-	}
-}
-
-/* SumatraPDF: extract document properties (hacky) */
 
 static inline int iswhite(c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-// <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>XML Paper Specification</dc:title><dc:subject>XPS Specification and Reference Guide</dc:subject><dc:creator>Jesse McGatha</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">2006-10-19T01:21:08Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">2006-10-19T01:21:08Z</dcterms:modified></cp:coreProperties>
-
 static void
-xps_hacky_get_prop(xps_context *ctx, char *data, fz_obj *dict, char *name, char *tag_name)
+xps_hacky_get_prop(fz_context *ctx, char *data, fz_obj *dict, char *name, char *tag_name)
 {
 	char *start, *end;
 	fz_obj *value;
@@ -384,39 +220,38 @@ xps_hacky_get_prop(xps_context *ctx, char *data, fz_obj *dict, char *name, char 
 	for (start++; iswhite(*start); start++);
 	for (end -= 3; iswhite(*end) && end > start; end--);
 
-	value = fz_new_string(ctx->ctx, start, end - start + 1);
-	fz_dict_puts(ctx->ctx, dict, name, value);
-	fz_drop_obj(ctx->ctx, value);
+	value = fz_new_string(ctx, start, end - start + 1);
+	fz_dict_puts(ctx, dict, name, value);
+	fz_drop_obj(ctx, value);
 }
 
-#define CONTENT_TYPE_CORE_PROPS \
-	"application/vnd.openxmlformats-package.core-properties+xml"
+#define REL_CORE_PROPERTIES \
+	"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
 
 static int
 xps_find_doc_props_path(xps_context *ctx, char path[1024])
 {
 	xml_element *root;
 
-	int code = xps_open_and_parse(ctx, "/[Content_Types].xml", &root);
+	int code = xps_open_and_parse(ctx, "/_rels/.rels", &root);
 	if (code != fz_okay)
 		return code;
 
 	*path = '\0';
-	if (root && !strcmp(xml_tag(root), "Types"))
+	if (!strcmp(xml_tag(root), "Relationships"))
 	{
 		xml_element *item;
 		for (item = xml_down(root); item; item = xml_next(item))
 		{
-			if (!strcmp(xml_tag(item), "Override") && xml_att(item, "ContentType") &&
-				!strcmp(xml_att(item, "ContentType"), CONTENT_TYPE_CORE_PROPS) &&
-				xml_att(item, "PartName"))
+			if (!strcmp(xml_tag(item), "Relationship") && xml_att(item, "Type") &&
+				!strcmp(xml_att(item, "Type"), REL_CORE_PROPERTIES) && xml_att(item, "Target"))
 			{
-				fz_strlcpy(path, xml_att(item, "PartName"), 1024);
+				xps_absolute_path(path, "", xml_att(item, "Target"), 1024);
 			}
 		}
 	}
 	else
-		code = fz_error_make(ctx->ctx, "couldn't parse part '[Content_Types].xml'");
+		code = fz_error_make(ctx->ctx, "couldn't parse part '/_rels/.rels'");
 
 	xml_free_element(ctx->ctx, root);
 
@@ -430,10 +265,7 @@ fz_obj *xps_extract_doc_props(xps_context *ctx)
 	fz_obj *dict;
 
 	if (xps_find_doc_props_path(ctx, path) != fz_okay)
-	{
-		fz_error_handle(ctx->ctx, -1, "couldn't find the exact part name for /docProps/core.xml");
-		fz_strlcpy(path, "/docProps/core.xml", sizeof(path));
-	}
+		fz_error_handle(ctx->ctx, -1, "ignore broken part '/_rels/.rels'");
 	if (!*path)
 		return NULL;
 
@@ -445,11 +277,11 @@ fz_obj *xps_extract_doc_props(xps_context *ctx)
 	}
 
 	dict = fz_new_dict(ctx->ctx, 8);
-	xps_hacky_get_prop(ctx, part->data, dict, "Title", "dc:title");
-	xps_hacky_get_prop(ctx, part->data, dict, "Subject", "dc:subject");
-	xps_hacky_get_prop(ctx, part->data, dict, "Author", "dc:creator");
-	xps_hacky_get_prop(ctx, part->data, dict, "CreationDate", "dcterms:created");
-	xps_hacky_get_prop(ctx, part->data, dict, "ModDate", "dcterms:modified");
+	xps_hacky_get_prop(ctx->ctx, part->data, dict, "Title", "dc:title");
+	xps_hacky_get_prop(ctx->ctx, part->data, dict, "Subject", "dc:subject");
+	xps_hacky_get_prop(ctx->ctx, part->data, dict, "Author", "dc:creator");
+	xps_hacky_get_prop(ctx->ctx, part->data, dict, "CreationDate", "dcterms:created");
+	xps_hacky_get_prop(ctx->ctx, part->data, dict, "ModDate", "dcterms:modified");
 
 	xps_free_part(ctx, part);
 

@@ -37,16 +37,15 @@ fz_free_text_span(fz_context *ctx, fz_text_span *span)
 {
 	fz_text_span *next;
 
-	do
+	while (span)
 	{
-		next = span->next;
 		if (span->font)
 			fz_drop_font(ctx, span->font);
+		next = span->next;
 		fz_free(ctx, span->text);
 		fz_free(ctx, span);
 		span = next;
 	}
-	while (span != NULL);
 }
 
 static void
@@ -160,32 +159,34 @@ fz_debug_text_span_xml(fz_text_span *span)
 	char buf[10];
 	int c, n, k, i;
 
-	printf("<span font=\"%s\" size=\"%g\" wmode=\"%d\" eol=\"%d\">\n",
-		span->font ? span->font->name : "NULL", span->size, span->wmode, span->eol);
-
-	for (i = 0; i < span->len; i++)
+	while (span)
 	{
-		printf("\t<char ucs=\"");
-		c = span->text[i].c;
-		if (c < 128)
-			putchar(c);
-		else
+		printf("<span font=\"%s\" size=\"%g\" wmode=\"%d\" eol=\"%d\">\n",
+			span->font ? span->font->name : "NULL", span->size, span->wmode, span->eol);
+	
+		for (i = 0; i < span->len; i++)
 		{
-			n = runetochar(buf, &c);
-			for (k = 0; k < n; k++)
-				putchar(buf[k]);
+			printf("\t<char ucs=\"");
+			c = span->text[i].c;
+			if (c < 128)
+				putchar(c);
+			else
+			{
+				n = runetochar(buf, &c);
+				for (k = 0; k < n; k++)
+					putchar(buf[k]);
+			}
+			printf("\" bbox=\"%d %d %d %d\" />\n",
+				span->text[i].bbox.x0,
+				span->text[i].bbox.y0,
+				span->text[i].bbox.x1,
+				span->text[i].bbox.y1);
 		}
-		printf("\" bbox=\"%d %d %d %d\" />\n",
-			span->text[i].bbox.x0,
-			span->text[i].bbox.y0,
-			span->text[i].bbox.x1,
-			span->text[i].bbox.y1);
+	
+		printf("</span>\n");
+
+		span = span->next;
 	}
-
-	printf("</span>\n");
-
-	if (span->next)
-		fz_debug_text_span_xml(span->next);
 }
 
 void
@@ -194,24 +195,26 @@ fz_debug_text_span(fz_text_span *span)
 	char buf[10];
 	int c, n, k, i;
 
-	for (i = 0; i < span->len; i++)
+	while (span)
 	{
-		c = span->text[i].c;
-		if (c < 128)
-			putchar(c);
-		else
+		for (i = 0; i < span->len; i++)
 		{
-			n = runetochar(buf, &c);
-			for (k = 0; k < n; k++)
-				putchar(buf[k]);
+			c = span->text[i].c;
+			if (c < 128)
+				putchar(c);
+			else
+			{
+				n = runetochar(buf, &c);
+				for (k = 0; k < n; k++)
+					putchar(buf[k]);
+			}
 		}
+	
+		if (span->eol)
+			putchar('\n');
+
+		span = span->next;
 	}
-
-	if (span->eol)
-		putchar('\n');
-
-	if (span->next)
-		fz_debug_text_span(span->next);
 }
 
 /***** SumatraPDF: various string fixups *****/
@@ -269,7 +272,7 @@ static int
 ornatecharacter(int ornate, int character)
 {
 	static wchar_t *ornates[] = {
-		L" \xA8\xB4`^\u02DA",
+		L" \xA8\xB4\x60\x5E\u02DA",
 		L"a\xE4\xE1\xE0\xE2\xE5", L"A\xC4\xC1\xC0\xC2\0",
 		L"e\xEB\xE9\xE8\xEA\0", L"E\xCB\xC9\xC8\xCA\0",
 		L"i\xEF\xED\xEC\xEE\0", L"I\xCF\xCD\xCC\xCE\0",
@@ -329,11 +332,11 @@ fixuptextspan(fz_context *ctx, fz_text_span *head)
 			switch (span->text[i].c)
 			{
 			/* recombine characters and their accents */
-			case 0x00A8: /* ¨ */
-			case 0x00B4: /* ´ */
-			case 0x0060: /* ` */
-			case 0x005E: /* ^ */
-			case 0x02DA: /* ° */
+			case 0x00A8: /* diaeresis/umlaut */
+			case 0x00B4: /* accute accent */
+			case 0x0060: /* grave accent */
+			case 0x005E: /* circumflex accent */
+			case 0x02DA: /* ring above */
 				if (span->next && span->next->len > 0 && (i + 1 == span->len || i + 2 == span->len && span->text[i + 1].c == 32))
 				{
 					mergetwospans(ctx, span);
@@ -392,7 +395,6 @@ fixup_delete_duplicates:
 				deletecharacter(span, i);
 			else if (i == span->len && span->eol)
 				span->eol = 0;
-			i--;
 		}
 	}
 }
@@ -427,9 +429,16 @@ fz_text_extract_span(fz_context *ctx, fz_text_span **last, fz_text *text, fz_mat
 		ascender = (float)face->ascender / face->units_per_EM;
 		descender = (float)face->descender / face->units_per_EM;
 	}
+	/* SumatraPDF: use a Type 3 font's FontBBox instead of 1 and 0 */
+	else if (font->t3procs && !fz_is_empty_rect(font->bbox))
+	{
+		ascender = font->bbox.y1 / 1000;
+		descender = font->bbox.y0 / 1000;
+	}
 
 	rect = fz_empty_rect;
 
+	/* SumatraPDF: TODO: make this depend on the per-glyph displacement vector */
 	if (text->wmode == 0)
 	{
 		dir.x = 1;
@@ -493,9 +502,10 @@ fz_text_extract_span(fz_context *ctx, fz_text_span **last, fz_text *text, fz_mat
 				{
 					fz_rect spacerect;
 					spacerect.x0 = -0.2f;
-					spacerect.y0 = 0;
+					/* SumatraPDF: make spaces stand out less */
+					spacerect.y0 = descender;
 					spacerect.x1 = 0;
-					spacerect.y1 = 1;
+					spacerect.y1 = ascender;
 					spacerect = fz_transform_rect(trm, spacerect);
 					fz_add_text_char(ctx, last, font, size, text->wmode, ' ', fz_round_rect(spacerect));
 				}
@@ -537,54 +547,54 @@ fz_text_extract_span(fz_context *ctx, fz_text_span **last, fz_text *text, fz_mat
 }
 
 static void
-fz_text_fill_text(fz_device *dev, fz_text *text, fz_matrix ctm,
+fz_text_fill_text(fz_context *ctx, void *user, fz_text *text, fz_matrix ctm,
 	fz_colorspace *colorspace, float *color, float alpha)
 {
-	fz_text_device *tdev = dev->user;
-	fz_text_extract_span(dev->ctx, &tdev->span, text, ctm, &tdev->point);
+	fz_text_device *tdev = user;
+	fz_text_extract_span(ctx, &tdev->span, text, ctm, &tdev->point);
 }
 
 static void
-fz_text_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm,
+fz_text_stroke_text(fz_context *ctx, void *user, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm,
 	fz_colorspace *colorspace, float *color, float alpha)
 {
-	fz_text_device *tdev = dev->user;
-	fz_text_extract_span(dev->ctx, &tdev->span, text, ctm, &tdev->point);
+	fz_text_device *tdev = user;
+	fz_text_extract_span(ctx, &tdev->span, text, ctm, &tdev->point);
 }
 
 static void
-fz_text_clip_text(fz_device *dev, fz_text *text, fz_matrix ctm, int accumulate)
+fz_text_clip_text(fz_context *ctx, void *user, fz_text *text, fz_matrix ctm, int accumulate)
 {
-	fz_text_device *tdev = dev->user;
-	fz_text_extract_span(dev->ctx, &tdev->span, text, ctm, &tdev->point);
+	fz_text_device *tdev = user;
+	fz_text_extract_span(ctx, &tdev->span, text, ctm, &tdev->point);
 }
 
 static void
-fz_text_clip_stroke_text(fz_device *dev, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm)
+fz_text_clip_stroke_text(fz_context *ctx, void *user, fz_text *text, fz_stroke_state *stroke, fz_matrix ctm)
 {
-	fz_text_device *tdev = dev->user;
-	fz_text_extract_span(dev->ctx, &tdev->span, text, ctm, &tdev->point);
+	fz_text_device *tdev = user;
+	fz_text_extract_span(ctx, &tdev->span, text, ctm, &tdev->point);
 }
 
 static void
-fz_text_ignore_text(fz_device *dev, fz_text *text, fz_matrix ctm)
+fz_text_ignore_text(fz_context *ctx, void *user, fz_text *text, fz_matrix ctm)
 {
-	fz_text_device *tdev = dev->user;
-	fz_text_extract_span(dev->ctx, &tdev->span, text, ctm, &tdev->point);
+	fz_text_device *tdev = user;
+	fz_text_extract_span(ctx, &tdev->span, text, ctm, &tdev->point);
 }
 
 static void
-fz_text_free_user(fz_device *dev)
+fz_text_free_user(fz_context *ctx, void *user)
 {
-	fz_text_device *tdev = dev->user;
+	fz_text_device *tdev = user;
 
 	tdev->span->eol = 1;
 
 	/* TODO: unicode NFC normalization */
 	/* TODO: bidi logical reordering */
-	fixuptextspan(dev->ctx, tdev->head);
+	fixuptextspan(ctx, tdev->head);
 
-	fz_free(dev->ctx, tdev);
+	fz_free(ctx, tdev);
 }
 
 fz_device *

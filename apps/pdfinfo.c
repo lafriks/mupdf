@@ -237,10 +237,9 @@ gatherdimensions(int page, fz_obj *pageref, fz_obj *pageobj)
 static void
 gatherfonts(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *fontdict = NULL;
 		fz_obj *subtype = NULL;
@@ -282,10 +281,9 @@ gatherfonts(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 static void
 gatherimages(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *imagedict;
 		fz_obj *type;
@@ -355,10 +353,9 @@ gatherimages(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 static void
 gatherforms(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *xobjdict;
 		fz_obj *type;
@@ -409,10 +406,9 @@ gatherforms(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 static void
 gatherpsobjs(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *xobjdict;
 		fz_obj *type;
@@ -452,10 +448,9 @@ gatherpsobjs(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 static void
 gathershadings(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *shade;
 		fz_obj *type;
@@ -496,10 +491,9 @@ gathershadings(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 static void
 gatherpatterns(int page, fz_obj *pageref, fz_obj *pageobj, fz_obj *dict)
 {
-	int i, n;
+	int i;
 
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 	{
 		fz_obj *patterndict;
 		fz_obj *type;
@@ -585,11 +579,9 @@ gatherresourceinfo(int page, fz_obj *rsrc)
 	font = fz_dict_gets(ctx, rsrc, "Font");
 	if (font)
 	{
-		int n;
-
 		gatherfonts(page, pageref, pageobj, font);
-		n = fz_dict_len(ctx, font);
-		for (i = 0; i < n; i++)
+
+		for (i = 0; i < fz_dict_len(ctx, font); i++)
 		{
 			fz_obj *obj = fz_dict_get_val(ctx, font, i);
 
@@ -602,13 +594,11 @@ gatherresourceinfo(int page, fz_obj *rsrc)
 	xobj = fz_dict_gets(ctx, rsrc, "XObject");
 	if (xobj)
 	{
-		int n;
-
 		gatherimages(page, pageref, pageobj, xobj);
 		gatherforms(page, pageref, pageobj, xobj);
 		gatherpsobjs(page, pageref, pageobj, xobj);
-		n = fz_dict_len(ctx, xobj);
-		for (i = 0; i < n; i++)
+
+		for (i = 0; i < fz_dict_len(ctx, xobj); i++)
 		{
 			fz_obj *obj = fz_dict_get_val(ctx, xobj, i);
 			subrsrc = fz_dict_gets(ctx, obj, "Resources");
@@ -624,10 +614,9 @@ gatherresourceinfo(int page, fz_obj *rsrc)
 	pattern = fz_dict_gets(ctx, rsrc, "Pattern");
 	if (pattern)
 	{
-		int n;
 		gatherpatterns(page, pageref, pageobj, pattern);
-		n = fz_dict_len(ctx, pattern);
-		for (i = 0; i < n; i++)
+
+		for (i = 0; i < fz_dict_len(ctx, pattern); i++)
 		{
 			fz_obj *obj = fz_dict_get_val(ctx, pattern, i);
 			subrsrc = fz_dict_gets(ctx, obj, "Resources");
@@ -708,9 +697,7 @@ printinfo(char *filename, int show, int page)
 				fz_to_num(image[i].pageref), fz_to_gen(image[i].pageref));
 
 			if (fz_is_array(ctx, image[i].u.image.filter))
-			{
-				int n = fz_array_len(ctx, image[i].u.image.filter);
-				for (j = 0; j < n; j++)
+				for (j = 0; j < fz_array_len(ctx, image[i].u.image.filter); j++)
 				{
 					fz_obj *obj = fz_array_get(ctx, image[i].u.image.filter, j);
 					char *filter = fz_strdup(ctx, fz_to_name(ctx, obj));
@@ -723,7 +710,6 @@ printinfo(char *filename, int show, int page)
 							j == fz_array_len(ctx, image[i].u.image.filter) - 1 ? "" : " ");
 					fz_free(ctx, filter);
 				}
-			}
 			else if (image[i].u.image.filter)
 			{
 				fz_obj *obj = image[i].u.image.filter;

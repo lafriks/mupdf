@@ -21,7 +21,6 @@ struct keyval
 {
 	fz_obj *k;
 	fz_obj *v;
-	int hash; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
 };
 
 struct fz_obj_s
@@ -56,6 +55,13 @@ struct fz_obj_s
 		} r;
 	} u;
 };
+
+static fz_obj *fz_resolve_indirect_null(fz_obj *ref)
+{
+	return ref;
+}
+
+fz_obj* (*fz_resolve_indirect)(fz_obj*) = fz_resolve_indirect_null;
 
 fz_obj *
 fz_new_null(fz_context *ctx)
@@ -205,7 +211,7 @@ int fz_to_int(fz_context *ctx, fz_obj *obj)
 	if (fz_is_int(ctx, obj))
 		return obj->u.i;
 	if (fz_is_real(ctx, obj))
-		return obj->u.f;
+		return (int)(obj->u.f + 0.5f); /* No roundf in MSVC */
 	return 0;
 }
 
@@ -392,19 +398,29 @@ fz_new_array(fz_context *ctx, int initialcap)
 	return obj;
 }
 
+static void
+fz_array_grow(fz_context *ctx, fz_obj *obj)
+{
+	int i;
+
+	obj->u.a.cap = (obj->u.a.cap * 3) / 2;
+	obj->u.a.items = fz_realloc(ctx, obj->u.a.items, obj->u.a.cap * sizeof(fz_obj*));
+
+	for (i = obj->u.a.len ; i < obj->u.a.cap; i++)
+		obj->u.a.items[i] = NULL;
+}
+
 fz_obj *
 fz_copy_array(fz_context *ctx, fz_obj *obj)
 {
 	fz_obj *new;
 	int i;
-	int n;
 
 	if (fz_is_indirect(obj) || !fz_is_array(ctx, obj))
 		fz_warn(ctx, "assert: not an array (%s)", fz_objkindstr(obj));
 
 	new = fz_new_array(ctx, fz_array_len(ctx, obj));
-	n = fz_array_len(ctx, obj);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_array_len(ctx, obj); i++)
 		fz_array_push(ctx, new, fz_array_get(ctx, obj, i));
 
 	return new;
@@ -462,13 +478,7 @@ fz_array_push(fz_context *ctx, fz_obj *obj, fz_obj *item)
 	else
 	{
 		if (obj->u.a.len + 1 > obj->u.a.cap)
-		{
-			int i;
-			obj->u.a.cap = (obj->u.a.cap * 3) / 2;
-			obj->u.a.items = fz_realloc(ctx, obj->u.a.items, obj->u.a.cap * sizeof(fz_obj*));
-			for (i = obj->u.a.len ; i < obj->u.a.cap; i++)
-				obj->u.a.items[i] = NULL;
-		}
+			fz_array_grow(ctx, obj);
 		obj->u.a.items[obj->u.a.len] = fz_keep_obj(item);
 		obj->u.a.len++;
 	}
@@ -484,17 +494,23 @@ fz_array_insert(fz_context *ctx, fz_obj *obj, fz_obj *item)
 	else
 	{
 		if (obj->u.a.len + 1 > obj->u.a.cap)
-		{
-			int i;
-			obj->u.a.cap = (obj->u.a.cap * 3) / 2;
-			obj->u.a.items = fz_realloc(ctx, obj->u.a.items, obj->u.a.cap * sizeof(fz_obj*));
-			for (i = obj->u.a.len ; i < obj->u.a.cap; i++)
-				obj->u.a.items[i] = NULL;
-		}
+			fz_array_grow(ctx, obj);
 		memmove(obj->u.a.items + 1, obj->u.a.items, obj->u.a.len * sizeof(fz_obj*));
 		obj->u.a.items[0] = fz_keep_obj(item);
 		obj->u.a.len++;
 	}
+}
+
+int
+fz_array_contains(fz_context *ctx, fz_obj *arr, fz_obj *obj)
+{
+	int i;
+
+	for (i = 0; i < fz_array_len(ctx, arr); i++)
+		if (!fz_objcmp(fz_array_get(ctx, arr, i), obj))
+			return 1;
+
+	return 0;
 }
 
 /* dicts may only have names as keys! */
@@ -525,7 +541,7 @@ fz_new_dict(fz_context *ctx, int initialcap)
 	obj->refs = 1;
 	obj->kind = FZ_DICT;
 
-	obj->u.d.sorted = 1;
+	obj->u.d.sorted = 0;
 	obj->u.d.len = 0;
 	obj->u.d.cap = initialcap > 1 ? initialcap : 10;
 
@@ -539,18 +555,32 @@ fz_new_dict(fz_context *ctx, int initialcap)
 	return obj;
 }
 
+static void
+fz_dict_grow(fz_context *ctx, fz_obj *obj)
+{
+	int i;
+
+	obj->u.d.cap = (obj->u.d.cap * 3) / 2;
+	obj->u.d.items = fz_realloc(ctx, obj->u.d.items, obj->u.d.cap * sizeof(struct keyval));
+
+	for (i = obj->u.d.len; i < obj->u.d.cap; i++)
+	{
+		obj->u.d.items[i].k = NULL;
+		obj->u.d.items[i].v = NULL;
+	}
+}
+
 fz_obj *
 fz_copy_dict(fz_context *ctx, fz_obj *obj)
 {
 	fz_obj *new;
-	int i, n;
+	int i;
 
 	if (fz_is_indirect(obj) || !fz_is_dict(ctx, obj))
 		fz_error_make(ctx, "assert: not a dict (%s)", fz_objkindstr(obj));
 
-	n = fz_dict_len(ctx, obj);
-	new = fz_new_dict(ctx, n);
-	for (i = 0; i < n; i++)
+	new = fz_new_dict(ctx, fz_dict_len(ctx, obj));
+	for (i = 0; i < fz_dict_len(ctx, obj); i++)
 		fz_dict_put(ctx, new, fz_dict_get_key(ctx, obj, i), fz_dict_get_val(ctx, obj, i));
 
 	return new;
@@ -594,12 +624,20 @@ fz_dict_get_val(fz_context *ctx, fz_obj *obj, int i)
 }
 
 static int
-fz_dict_finds(fz_context *ctx, fz_obj *obj, char *key, int hash)
+fz_dict_finds(fz_context *ctx, fz_obj *obj, char *key, int *location)
 {
-	if (obj->u.d.sorted)
+	if (obj->u.d.sorted && obj->u.d.len > 0)
 	{
 		int l = 0;
 		int r = obj->u.d.len - 1;
+
+		if (strcmp(fz_to_name(ctx, obj->u.d.items[r].k), key) < 0)
+		{
+			if (location)
+				*location = r + 1;
+			return -1;
+		}
+
 		while (l <= r)
 		{
 			int m = (l + r) >> 1;
@@ -610,6 +648,9 @@ fz_dict_finds(fz_context *ctx, fz_obj *obj, char *key, int hash)
 				l = m + 1;
 			else
 				return m;
+
+			if (location)
+				*location = l;
 		}
 	}
 
@@ -617,30 +658,14 @@ fz_dict_finds(fz_context *ctx, fz_obj *obj, char *key, int hash)
 	{
 		int i;
 		for (i = 0; i < obj->u.d.len; i++)
-			/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
-			if (hash == obj->u.d.items[i].hash && strcmp(fz_to_name(ctx, obj->u.d.items[i].k), key) == 0)
+			if (strcmp(fz_to_name(ctx, obj->u.d.items[i].k), key) == 0)
 				return i;
-	}
 
-	return -1;
+		if (location)
+			*location = obj->u.d.len;
 }
 
-/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
-// adapted from base_hash.c
-static unsigned hash_str(unsigned char *s)
-{
-	unsigned val = 0;
-	int i, len = strlen(s);
-	for (i = 0; i < len; i++)
-	{
-		val += s[i];
-		val += (val << 10);
-		val ^= (val >> 6);
-	}
-	val += (val << 3);
-	val ^= (val >> 11);
-	val += (val << 15);
-	return val;
+	return -1;
 }
 
 fz_obj *
@@ -653,7 +678,7 @@ fz_dict_gets(fz_context *ctx, fz_obj *obj, char *key)
 	if (!fz_is_dict(ctx, obj))
 		return NULL;
 
-	i = fz_dict_finds(ctx, obj, key, hash_str(key)); /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
+	i = fz_dict_finds(ctx, obj, key, NULL);
 	if (i >= 0)
 		return obj->u.d.items[i].v;
 
@@ -681,9 +706,9 @@ fz_dict_getsa(fz_context *ctx, fz_obj *obj, char *key, char *abbrev)
 void
 fz_dict_put(fz_context *ctx, fz_obj *obj, fz_obj *key, fz_obj *val)
 {
+	int location;
 	char *s;
 	int i;
-	int hash; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
 
 	obj = fz_resolve_indirect(ctx, obj);
 
@@ -707,37 +732,30 @@ fz_dict_put(fz_context *ctx, fz_obj *obj, fz_obj *key, fz_obj *val)
 		return;
 	}
 
-	/* SumatraPDF: TODO: turn dict into a real hash and merge with base_hash.c(?) */
-	/* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
-	hash = hash_str(fz_to_name(ctx, key));
-	i = fz_dict_finds(ctx, obj, s, hash);
-	if (i >= 0)
+	if (obj->u.d.len > 100 && !obj->u.d.sorted)
+		fz_sort_dict(ctx, obj);
+
+	i = fz_dict_finds(ctx, obj, s, &location);
+	if (i >= 0 && i < obj->u.d.len)
 	{
 		fz_drop_obj(ctx, obj->u.d.items[i].v);
 		obj->u.d.items[i].v = fz_keep_obj(val);
-		return;
 	}
-
-	if (obj->u.d.len + 1 > obj->u.d.cap)
+	else
 	{
-		obj->u.d.cap = (obj->u.d.cap * 3) / 2;
-		obj->u.d.items = fz_realloc(ctx, obj->u.d.items, obj->u.d.cap * sizeof(struct keyval));
-		for (i = obj->u.d.len; i < obj->u.d.cap; i++)
-		{
-			obj->u.d.items[i].k = NULL;
-			obj->u.d.items[i].v = NULL;
-		}
+		if (obj->u.d.len + 1 > obj->u.d.cap)
+			fz_dict_grow(ctx, obj);
+
+		i = location;
+		if (obj->u.d.sorted && obj->u.d.len > 0)
+			memmove(&obj->u.d.items[i + 1],
+				&obj->u.d.items[i],
+				(obj->u.d.len - i) * sizeof(struct keyval));
+
+		obj->u.d.items[i].k = fz_keep_obj(key);
+		obj->u.d.items[i].v = fz_keep_obj(val);
+		obj->u.d.len ++;
 	}
-
-	/* borked! */
-	if (obj->u.d.len)
-		if (strcmp(fz_to_name(ctx, obj->u.d.items[obj->u.d.len - 1].k), s) > 0)
-			obj->u.d.sorted = 0;
-
-	obj->u.d.items[obj->u.d.len].k = fz_keep_obj(key);
-	obj->u.d.items[obj->u.d.len].v = fz_keep_obj(val);
-	obj->u.d.items[obj->u.d.len].hash = hash; /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
-	obj->u.d.len ++;
 }
 
 void
@@ -757,7 +775,7 @@ fz_dict_dels(fz_context *ctx, fz_obj *obj, char *key)
 		fz_warn(ctx, "assert: not a dict (%s)", fz_objkindstr(obj));
 	else
 	{
-		int i = fz_dict_finds(ctx, obj, key, hash_str(key)); /* cf. http://bugs.ghostscript.com/show_bug.cgi?id=692416 */
+		int i = fz_dict_finds(ctx, obj, key, NULL);
 		if (i >= 0)
 		{
 			fz_drop_obj(ctx, obj->u.d.items[i].k);

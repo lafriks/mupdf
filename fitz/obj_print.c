@@ -157,13 +157,12 @@ static void fmt_name(struct fmt *fmt, fz_obj *obj)
 
 static void fmt_array(struct fmt *fmt, fz_obj *obj)
 {
-	int i, n;
+	int i;
 	fz_context *ctx = fmt->ctx;
 
-	n = fz_array_len(ctx, obj);
 	if (fmt->tight) {
 		fmt_putc(fmt, '[');
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < fz_array_len(ctx, obj); i++) {
 			fmt_obj(fmt, fz_array_get(ctx, obj, i));
 			fmt_sep(fmt);
 		}
@@ -171,7 +170,7 @@ static void fmt_array(struct fmt *fmt, fz_obj *obj)
 	}
 	else {
 		fmt_puts(fmt, "[ ");
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < fz_array_len(ctx, obj); i++) {
 			if (fmt->col > 60) {
 				fmt_putc(fmt, '\n');
 				fmt_indent(fmt);
@@ -186,14 +185,13 @@ static void fmt_array(struct fmt *fmt, fz_obj *obj)
 
 static void fmt_dict(struct fmt *fmt, fz_obj *obj)
 {
-	int i, n;
+	int i;
 	fz_obj *key, *val;
 	fz_context *ctx = fmt->ctx;
 
-	n = fz_dict_len(ctx, obj);
 	if (fmt->tight) {
 		fmt_puts(fmt, "<<");
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < fz_dict_len(ctx, obj); i++) {
 			fmt_obj(fmt, fz_dict_get_key(ctx, obj, i));
 			fmt_sep(fmt);
 			fmt_obj(fmt, fz_dict_get_val(ctx, obj, i));
@@ -204,7 +202,7 @@ static void fmt_dict(struct fmt *fmt, fz_obj *obj)
 	else {
 		fmt_puts(fmt, "<<\n");
 		fmt->indent ++;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < fz_dict_len(ctx, obj); i++) {
 			key = fz_dict_get_key(ctx, obj, i);
 			val = fz_dict_get_val(ctx, obj, i);
 			fmt_indent(fmt);

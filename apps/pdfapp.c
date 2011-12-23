@@ -140,17 +140,21 @@ static void pdfapp_open_pdf(pdfapp_t *app, char *filename, int fd)
 
 	app->outline = pdf_load_outline(app->xref);
 
-	app->doctitle = filename;
-	if (strrchr(app->doctitle, '\\'))
-		app->doctitle = strrchr(app->doctitle, '\\') + 1;
-	if (strrchr(app->doctitle, '/'))
-		app->doctitle = strrchr(app->doctitle, '/') + 1;
 	info = fz_dict_gets(app->ctx, app->xref->trailer, "Info");
 	if (info)
 	{
 		obj = fz_dict_gets(app->ctx, info, "Title");
 		if (obj)
 			app->doctitle = pdf_to_utf8(app->ctx, obj);
+	}
+	if (!app->doctitle)
+	{
+		app->doctitle = filename;
+		if (strrchr(app->doctitle, '\\'))
+			app->doctitle = strrchr(app->doctitle, '\\') + 1;
+		if (strrchr(app->doctitle, '/'))
+		app->doctitle = strrchr(app->doctitle, '/') + 1;
+		app->doctitle = fz_strdup(app->ctx, app->doctitle);
 	}
 
 	/*
@@ -175,7 +179,7 @@ static void pdfapp_open_xps(pdfapp_t *app, char *filename, int fd)
 		pdfapp_error(app, fz_error_note(app->ctx, error, "cannot open document '%s'", filename));
 	fz_close(file);
 
-	app->doctitle = filename;
+	app->doctitle = fz_strdup(app->ctx, filename);
 
 	app->pagecount = xps_count_pages(app->xps);
 }
@@ -211,6 +215,22 @@ void pdfapp_open(pdfapp_t *app, char *filename, int fd, int reload)
 
 void pdfapp_close(pdfapp_t *app)
 {
+	if (app->page_list)
+		fz_free_display_list(app->ctx, app->page_list);
+	app->page_list = NULL;
+
+	if (app->page_text)
+		fz_free_text_span(app->ctx, app->page_text);
+	app->page_text = NULL;
+
+	if (app->page_links)
+		pdf_free_link(app->ctx, app->page_links);
+	app->page_links = NULL;
+
+	if (app->doctitle)
+		fz_free(app->ctx, app->doctitle);
+	app->doctitle = NULL;
+
 	if (app->cache)
 		fz_free_glyph_cache(app->ctx, app->cache);
 	app->cache = NULL;
@@ -220,7 +240,7 @@ void pdfapp_close(pdfapp_t *app)
 	app->image = NULL;
 
 	if (app->outline)
-		pdf_free_outline(app->ctx, app->outline);
+		fz_free_outline(app->ctx, app->outline);
 	app->outline = NULL;
 
 	if (app->xref)
@@ -432,10 +452,9 @@ static void pdfapp_showpage(pdfapp_t *app, int loadpage, int drawpage, int repai
 static void pdfapp_gotouri(pdfapp_t *app, fz_obj *uri)
 {
 	char *buf;
-	int n = fz_to_str_len(app->ctx, uri);
-	buf = fz_malloc(app->ctx, n + 1);
-	memcpy(buf, fz_to_str_buf(app->ctx, uri), n);
-	buf[n] = 0;
+	buf = fz_malloc(app->ctx, fz_to_str_len(app->ctx, uri) + 1);
+	memcpy(buf, fz_to_str_buf(app->ctx, uri), fz_to_str_len(app->ctx, uri));
+	buf[fz_to_str_len(app->ctx, uri)] = 0;
 	winopenuri(app, buf);
 	fz_free(app->ctx, buf);
 }
@@ -605,11 +624,7 @@ static void pdfapp_searchforward(pdfapp_t *app, enum panning *panto)
 	} while (app->pageno != startpage);
 
 	if (app->pageno == startpage)
-	{
 		pdfapp_warn(app, "String '%s' not found.", app->search);
-		winrepaintsearch(app);
-	}
-	else
 		winrepaint(app);
 
 	wincursor(app, HAND);
@@ -659,13 +674,9 @@ static void pdfapp_searchbackward(pdfapp_t *app, enum panning *panto)
 	} while (app->pageno != startpage);
 
 	if (app->pageno == startpage)
-	{
 		pdfapp_warn(app, "String '%s' not found.", app->search);
-		winrepaintsearch(app);
-	}
-	else
-		winrepaint(app);
 
+	winrepaint(app);
 	wincursor(app, HAND);
 }
 
@@ -702,6 +713,16 @@ void pdfapp_onkey(pdfapp_t *app, int c)
 				if (n > 0)
 				{
 					winrepaintsearch(app);
+
+					if (app->searchdir < 0)
+					{
+						if (app->pageno == 1)
+							app->pageno = app->pagecount;
+						else
+							app->pageno--;
+						pdfapp_showpage(app, 1, 1, 0);
+					}
+
 					pdfapp_onkey(app, 'n');
 				}
 				else
@@ -737,10 +758,6 @@ void pdfapp_onkey(pdfapp_t *app, int c)
 
 	switch (c)
 	{
-
-	case '?':
-		winhelp(app);
-		break;
 
 	case 'q':
 		winclose(app);
@@ -927,8 +944,17 @@ void pdfapp_onkey(pdfapp_t *app, int c)
 	 * Searching
 	 */
 
+	case '?':
+		app->isediting = 1;
+		app->searchdir = -1;
+		app->search[0] = 0;
+		app->hit = -1;
+		app->hitlen = 0;
+		winrepaintsearch(app);
+		break;
 	case '/':
 		app->isediting = 1;
+		app->searchdir = 1;
 		app->search[0] = 0;
 		app->hit = -1;
 		app->hitlen = 0;
@@ -936,12 +962,18 @@ void pdfapp_onkey(pdfapp_t *app, int c)
 		break;
 
 	case 'n':
+		if (app->searchdir > 0)
 		pdfapp_searchforward(app, &panto);
+		else
+			pdfapp_searchbackward(app, &panto);
 		loadpage = 0;
 		break;
 
 	case 'N':
+		if (app->searchdir > 0)
 		pdfapp_searchbackward(app, &panto);
+		else
+			pdfapp_searchforward(app, &panto);
 		loadpage = 0;
 		break;
 

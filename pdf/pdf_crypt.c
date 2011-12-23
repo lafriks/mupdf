@@ -54,7 +54,8 @@ pdf_new_crypt(fz_context *ctx, pdf_crypt **cryptp, fz_obj *dict, fz_obj *id)
 	fz_error error;
 	fz_obj *obj;
 
-	crypt = fz_calloc(ctx, 1, sizeof(pdf_crypt));
+	crypt = fz_malloc(ctx, sizeof(pdf_crypt));
+	memset(crypt, 0x00, sizeof(pdf_crypt));
 
 	/* Common to all security handlers (PDF 1.7 table 3.18) */
 
@@ -729,7 +730,11 @@ pdf_crypt_obj_imp(fz_context *ctx, pdf_crypt *crypt, fz_obj *obj, unsigned char 
 
 		if (crypt->strf.method == PDF_CRYPT_AESV2 || crypt->strf.method == PDF_CRYPT_AESV3)
 		{
-			if (n & 15 || n < 32)
+			if (n == 0)
+			{
+				/* Empty strings are permissible */
+			}
+			else if (n & 15 || n < 32)
 				fz_warn(ctx, "invalid string length for aes encryption");
 			else
 			{

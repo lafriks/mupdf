@@ -39,8 +39,7 @@ pdf_stream_has_crypt(fz_context *ctx, fz_obj *stm)
 			return 1;
 		if (fz_is_array(ctx, filters))
 		{
-			int n = fz_array_len(ctx, filters);
-			for (i = 0; i < n; i++)
+			for (i = 0; i < fz_array_len(ctx, filters); i++)
 			{
 				obj = fz_array_get(ctx, filters, i);
 				if (!strcmp(fz_to_name(ctx, obj), "Crypt"))
@@ -144,14 +143,12 @@ build_filter_chain(fz_stream *chain, pdf_xref *xref, fz_obj *fs, fz_obj *ps, int
 {
 	fz_obj *f;
 	fz_obj *p;
-	int i, n;
-	fz_context *ctx = chain->ctx;
+	int i;
 
-	n = fz_array_len(ctx, fs);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_array_len(xref->ctx, fs); i++)
 	{
-		f = fz_array_get(ctx, fs, i);
-		p = fz_array_get(ctx, ps, i);
+		f = fz_array_get(xref->ctx, fs, i);
+		p = fz_array_get(xref->ctx, ps, i);
 		chain = build_filter(chain, xref, f, p, num, gen);
 	}
 
@@ -363,7 +360,7 @@ pdf_load_stream(fz_buffer **bufp, pdf_xref *xref, int num, int gen)
 	fz_error error;
 	fz_stream *stm;
 	fz_obj *dict, *obj;
-	int i, len, n;
+	int i, len;
 	fz_context *ctx = xref->ctx;
 
 	error = pdf_open_stream(&stm, xref, num, gen);
@@ -377,8 +374,7 @@ pdf_load_stream(fz_buffer **bufp, pdf_xref *xref, int num, int gen)
 	len = fz_to_int(ctx, fz_dict_gets(ctx, dict, "Length"));
 	obj = fz_dict_gets(ctx, dict, "Filter");
 	len = pdf_guess_filter_length(len, fz_to_name(ctx, obj));
-	n = fz_array_len(ctx, obj);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_array_len(ctx, obj); i++)
 		len = pdf_guess_filter_length(len, fz_to_name(ctx, fz_array_get(ctx, obj, i)));
 
 	fz_drop_obj(ctx, dict);

@@ -41,6 +41,19 @@ static inline int getlong(fz_stream *file)
 	return a | b << 8 | c << 16 | d << 24;
 }
 
+/* SumatraPDF: support ZIP64 extension */
+
+#define ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIG 0x07064b50
+#define ZIP64_END_OF_CENTRAL_DIRECTORY_SIG 0x06064b50
+#define ZIP64_EXTRA_FIELD_SIG 0x0001
+
+static inline int getlong64(fz_stream *file)
+{
+	int a = getlong(file);
+	int b = getlong(file);
+	return b != 0 ? -1 : a;
+}
+
 static void *
 xps_zip_alloc_items(xps_context *ctx, int items, int size)
 {
@@ -176,8 +189,43 @@ xps_read_zip_dir(xps_context *ctx, int start_offset)
 	(void) getlong(ctx->file); /* size of central directory */
 	offset = getlong(ctx->file); /* offset to central directory */
 
+	/* SumatraPDF: support ZIP64 extension */
+	if (count == 0xFFFF)
+	{
+		fz_seek(ctx->file, start_offset - 20, 0);
+
+		sig = getlong(ctx->file);
+		if (sig != ZIP64_END_OF_CENTRAL_DIRECTORY_LOCATOR_SIG)
+			return fz_error_make(ctx->ctx, "wrong zip64 end of central directory locator signature (0x%x)", sig);
+
+		(void) getlong(ctx->file); /* start disk */
+		offset = getlong64(ctx->file); /* offset to end of central directory record */
+		if (offset < 0)
+			return fz_error_make(ctx->ctx, "zip64 files larger than 2 GB aren't supported");
+
+		fz_seek(ctx->file, offset, 0);
+
+		sig = getlong(ctx->file);
+		if (sig != ZIP64_END_OF_CENTRAL_DIRECTORY_SIG)
+			return fz_error_make(ctx->ctx, "wrong zip64 end of central directory signature (0x%x)", sig);
+
+		(void) getlong64(ctx->file); /* size of record */
+		(void) getshort(ctx->file); /* version made by */
+		(void) getshort(ctx->file); /* version to extract */
+		(void) getlong(ctx->file); /* disk number */
+		(void) getlong(ctx->file); /* disk number start */
+		count = getlong64(ctx->file); /* entries in central directory disk */
+		(void) getlong64(ctx->file); /* entries in central directory */
+		(void) getlong64(ctx->file); /* size of central directory */
+		offset = getlong64(ctx->file); /* offset to central directory */
+
+		if (count < 0 || offset < 0)
+			return fz_error_make(ctx->ctx, "zip64 files larger than 2 GB aren't supported");
+	}
+
 	ctx->zip_count = count;
 	ctx->zip_table = fz_calloc(ctx->ctx, count, sizeof(xps_entry));
+	memset(ctx->zip_table, 0, sizeof(xps_entry) * count);
 
 	fz_seek(ctx->file, offset, 0);
 
@@ -208,7 +256,24 @@ xps_read_zip_dir(xps_context *ctx, int start_offset)
 		fz_read(ctx->file, (unsigned char*)ctx->zip_table[i].name, namesize);
 		ctx->zip_table[i].name[namesize] = 0;
 
-		fz_seek(ctx->file, metasize, 1);
+		/* SumatraPDF: support ZIP64 extension */
+		while (metasize > 0)
+		{
+			int type = getshort(ctx->file);
+			int size = getshort(ctx->file);
+			if (type == ZIP64_EXTRA_FIELD_SIG)
+			{
+				ctx->zip_table[i].usize = getlong64(ctx->file);
+				ctx->zip_table[i].csize = getlong64(ctx->file);
+				ctx->zip_table[i].offset = getlong64(ctx->file);
+				fz_seek(ctx->file, -24, 1);
+			}
+			fz_seek(ctx->file, size, 1);
+			metasize -= 4 + size;
+		}
+		if (ctx->zip_table[i].usize < 0 || ctx->zip_table[i].csize < 0 || ctx->zip_table[i].offset < 0)
+			return fz_error_make(ctx->ctx, "zip64 files larger than 2 GB aren't supported");
+
 		fz_seek(ctx->file, commentsize, 1);
 	}
 
@@ -395,7 +460,8 @@ xps_open_directory(fz_context *fctx, xps_context **ctxp, char *directory)
 	xps_context *ctx;
 	int code;
 
-	ctx = fz_calloc(fctx, 1, sizeof(xps_context));
+	ctx = fz_malloc(fctx, sizeof(xps_context));
+	memset(ctx, 0, sizeof(xps_context));
 
 	ctx->directory = fz_strdup(fctx, directory);
 	ctx->ctx = fctx;
@@ -417,7 +483,8 @@ xps_open_stream(xps_context **ctxp, fz_stream *file)
 	xps_context *ctx;
 	int code;
 
-	ctx = fz_calloc(file->ctx, 1, sizeof(xps_context));
+	ctx = fz_malloc(file->ctx, sizeof(xps_context));
+	memset(ctx, 0, sizeof(xps_context));
 
 	ctx->ctx = file->ctx;
 	ctx->file = fz_keep_stream(file);

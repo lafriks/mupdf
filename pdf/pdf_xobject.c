@@ -9,7 +9,7 @@ pdf_load_xobject(pdf_xobject **formp, pdf_xref *xref, fz_obj *dict)
 	fz_obj *obj;
 	fz_context *ctx = xref->ctx;
 
-	if ((*formp = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)pdf_drop_xobject, dict)))
+	if ((*formp = pdf_find_item(ctx, xref->store, pdf_drop_xobject, dict)))
 	{
 		pdf_keep_xobject(*formp);
 		return fz_okay;
@@ -22,7 +22,7 @@ pdf_load_xobject(pdf_xobject **formp, pdf_xref *xref, fz_obj *dict)
 	form->colorspace = NULL;
 
 	/* Store item immediately, to avoid possible recursion if objects refer back to this one */
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)pdf_keep_xobject, (pdf_store_drop_fn *)pdf_drop_xobject, dict, form);
+	pdf_store_item(ctx, xref->store, pdf_keep_xobject, pdf_drop_xobject, dict, form);
 
 	obj = fz_dict_gets(ctx, dict, "BBox");
 	form->bbox = pdf_to_rect(ctx, obj);
@@ -65,7 +65,7 @@ pdf_load_xobject(pdf_xobject **formp, pdf_xref *xref, fz_obj *dict)
 	error = pdf_load_stream(&form->contents, xref, fz_to_num(dict), fz_to_gen(dict));
 	if (error)
 	{
-		pdf_remove_item(ctx, xref->store, (pdf_store_drop_fn *)pdf_drop_xobject, dict);
+		pdf_remove_item(ctx, xref->store, pdf_drop_xobject, dict);
 		pdf_drop_xobject(ctx, form);
 		return fz_error_note(ctx, error, "cannot load xobject content stream (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}

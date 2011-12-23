@@ -69,7 +69,7 @@ pdf_load_page_tree_node(pdf_xref *xref, fz_obj *node, struct info info)
 		fz_dict_dels(ctx, node, ".seen");
 	}
 	/* SumatraPDF: fix a potential NULL pointer dereference */
-	else if (fz_is_dict(ctx, node))
+	else if (fz_is_indirect(node) || fz_is_dict(ctx, node))
 	{
 		dict = fz_resolve_indirect(ctx, node);
 
@@ -146,14 +146,18 @@ pdf_pattern_uses_blending(fz_context *ctx, fz_obj *dict)
 	if (pdf_resources_use_blending(ctx, obj))
 		return 1;
 	obj = fz_dict_gets(ctx, dict, "ExtGState");
-	return pdf_extgstate_uses_blending(ctx, obj);
+	if (pdf_extgstate_uses_blending(ctx, obj))
+		return 1;
+	return 0;
 }
 
 static int
 pdf_xobject_uses_blending(fz_context *ctx, fz_obj *dict)
 {
 	fz_obj *obj = fz_dict_gets(ctx, dict, "Resources");
-	return pdf_resources_use_blending(ctx, obj);
+	if (pdf_resources_use_blending(ctx, obj))
+		return 1;
+	return 0;
 }
 
 static int
@@ -161,7 +165,7 @@ pdf_resources_use_blending(fz_context *ctx, fz_obj *rdb)
 {
 	fz_obj *dict;
 	fz_obj *tmp;
-	int i, n;
+	int i;
 
 	if (!rdb)
 		return 0;
@@ -175,20 +179,17 @@ pdf_resources_use_blending(fz_context *ctx, fz_obj *rdb)
 	fz_drop_obj(ctx, tmp);
 
 	dict = fz_dict_gets(ctx, rdb, "ExtGState");
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 		if (pdf_extgstate_uses_blending(ctx, fz_dict_get_val(ctx, dict, i)))
 			goto found;
 
 	dict = fz_dict_gets(ctx, rdb, "Pattern");
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 		if (pdf_pattern_uses_blending(ctx, fz_dict_get_val(ctx, dict, i)))
 			goto found;
 
 	dict = fz_dict_gets(ctx, rdb, "XObject");
-	n = fz_dict_len(ctx, dict);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_dict_len(ctx, dict); i++)
 		if (pdf_xobject_uses_blending(ctx, fz_dict_get_val(ctx, dict, i)))
 			goto found;
 
@@ -279,7 +280,7 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 	pdf_annot *annot;
 	fz_obj *pageobj, *pageref;
 	fz_obj *obj;
-	fz_bbox bbox;
+	fz_rect mediabox, cropbox;
 	fz_context *ctx = xref->ctx;
 
 	if (number < 0 || number >= xref->page_len)
@@ -299,28 +300,24 @@ pdf_load_page(pdf_page **pagep, pdf_xref *xref, int number)
 	page->links = NULL;
 	page->annots = NULL;
 
-	obj = fz_dict_gets(ctx, pageobj, "MediaBox");
-	bbox = fz_round_rect(pdf_to_rect(ctx, obj));
-	if (fz_is_empty_rect(pdf_to_rect(ctx, obj)))
+	mediabox = pdf_to_rect(ctx, fz_dict_gets(ctx, pageobj, "MediaBox"));
+	if (fz_is_empty_rect(mediabox))
 	{
 		fz_warn(ctx, "cannot find page size for page %d", number + 1);
-		bbox.x0 = 0;
-		bbox.y0 = 0;
-		bbox.x1 = 612;
-		bbox.y1 = 792;
+		mediabox.x0 = 0;
+		mediabox.y0 = 0;
+		mediabox.x1 = 612;
+		mediabox.y1 = 792;
 	}
 
-	obj = fz_dict_gets(ctx, pageobj, "CropBox");
-	if (fz_is_array(ctx, obj))
-	{
-		fz_bbox cropbox = fz_round_rect(pdf_to_rect(ctx, obj));
-		bbox = fz_intersect_bbox(bbox, cropbox);
-	}
+	cropbox = pdf_to_rect(ctx, fz_dict_gets(ctx, pageobj, "CropBox"));
+	if (!fz_is_empty_rect(cropbox))
+		mediabox = fz_intersect_rect(mediabox, cropbox);
 
-	page->mediabox.x0 = MIN(bbox.x0, bbox.x1);
-	page->mediabox.y0 = MIN(bbox.y0, bbox.y1);
-	page->mediabox.x1 = MAX(bbox.x0, bbox.x1);
-	page->mediabox.y1 = MAX(bbox.y0, bbox.y1);
+	page->mediabox.x0 = MIN(mediabox.x0, mediabox.x1);
+	page->mediabox.y0 = MIN(mediabox.y0, mediabox.y1);
+	page->mediabox.x1 = MAX(mediabox.x0, mediabox.x1);
+	page->mediabox.y1 = MAX(mediabox.y0, mediabox.y1);
 
 	if (page->mediabox.x1 - page->mediabox.x0 < 1 || page->mediabox.y1 - page->mediabox.y0 < 1)
 	{

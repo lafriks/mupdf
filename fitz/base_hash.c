@@ -55,6 +55,7 @@ fz_new_hash_table(fz_context *ctx, int initialsize, int keylen)
 	table->size = initialsize;
 	table->load = 0;
 	table->ents = fz_calloc(ctx, table->size, sizeof(fz_hash_entry));
+	memset(table->ents, 0, sizeof(fz_hash_entry) * table->size);
 
 	table->ctx = ctx;
 

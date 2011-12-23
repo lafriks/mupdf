@@ -32,10 +32,8 @@ static void
 close_null(fz_stream *stm)
 {
 	struct null_filter *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -43,7 +41,6 @@ fz_open_null(fz_stream *chain, int len)
 {
 	struct null_filter *state;
 
-	assert(chain != NULL);
 	state = fz_malloc(chain->ctx, sizeof(struct null_filter));
 	state->chain = chain;
 	state->remain = len;
@@ -138,10 +135,8 @@ static void
 close_ahxd(fz_stream *stm)
 {
 	fz_ahxd *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -275,10 +270,8 @@ static void
 close_a85d(fz_stream *stm)
 {
 	fz_a85d *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -286,7 +279,6 @@ fz_open_a85d(fz_stream *chain)
 {
 	fz_a85d *state;
 
-	assert(chain != NULL);
 	state = fz_malloc(chain->ctx, sizeof(fz_a85d));
 	state->chain = chain;
 	state->rp = state->bp;
@@ -363,10 +355,8 @@ static void
 close_rld(fz_stream *stm)
 {
 	fz_rld *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -374,7 +364,6 @@ fz_open_rld(fz_stream *chain)
 {
 	fz_rld *state;
 
-	assert(chain != NULL);
 	state = fz_malloc(chain->ctx, sizeof(fz_rld));
 	state->chain = chain;
 	state->run = 0;
@@ -413,10 +402,8 @@ static void
 close_arc4(fz_stream *stm)
 {
 	fz_arc4c *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -497,10 +484,8 @@ static void
 close_aesd(fz_stream *stm)
 {
 	fz_aesd *state = stm->state;
-	fz_stream *chain = state->chain;
-
+	fz_close(state->chain);
 	fz_free(stm->ctx, state);
-	fz_close(chain);
 }
 
 fz_stream *
@@ -508,7 +493,6 @@ fz_open_aesd(fz_stream *chain, unsigned char *key, unsigned keylen)
 {
 	fz_aesd *state;
 
-	assert(chain != NULL);
 	state = fz_malloc(chain->ctx, sizeof(fz_aesd));
 	state->chain = chain;
 	aes_setkey_dec(&state->aes, key, keylen * 8);

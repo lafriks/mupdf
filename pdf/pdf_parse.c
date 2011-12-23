@@ -40,29 +40,27 @@ pdf_to_utf8(fz_context *ctx, fz_obj *src)
 	int ucs;
 	int i;
 
-	/* SumatraPDF: correctly handle empty UTF-16 strings */
 	if (srclen >= 2 && srcptr[0] == 254 && srcptr[1] == 255)
 	{
-		for (i = 2; i < srclen; i += 2)
+		for (i = 2; i + 1 < srclen; i += 2)
 		{
-			ucs = (srcptr[i] << 8) | srcptr[i+1];
+			ucs = srcptr[i] << 8 | srcptr[i+1];
 			dstlen += runelen(ucs);
 		}
 
 		dstptr = dst = fz_malloc(ctx, dstlen + 1);
 
-		for (i = 2; i < srclen; i += 2)
+		for (i = 2; i + 1 < srclen; i += 2)
 		{
-			ucs = (srcptr[i] << 8) | srcptr[i+1];
+			ucs = srcptr[i] << 8 | srcptr[i+1];
 			dstptr += runetochar(dstptr, &ucs);
 		}
 	}
-	/* SumatraPDF: also handle little-endian UTF-16 strings */
 	else if (srclen >= 2 && srcptr[0] == 255 && srcptr[1] == 254)
 	{
 		for (i = 2; i + 1 < srclen; i += 2)
 		{
-			ucs = srcptr[i] | (srcptr[i+1] << 8);
+			ucs = srcptr[i] | srcptr[i+1] << 8;
 			dstlen += runelen(ucs);
 		}
 
@@ -70,7 +68,7 @@ pdf_to_utf8(fz_context *ctx, fz_obj *src)
 
 		for (i = 2; i + 1 < srclen; i += 2)
 		{
-			ucs = srcptr[i] | (srcptr[i+1] << 8);
+			ucs = srcptr[i] | srcptr[i+1] << 8;
 			dstptr += runetochar(dstptr, &ucs);
 		}
 	}
@@ -101,19 +99,17 @@ pdf_to_ucs2(fz_context *ctx, fz_obj *src)
 	int srclen = fz_to_str_len(ctx, src);
 	int i;
 
-	/* SumatraPDF: correctly handle empty UTF-16 strings */
 	if (srclen >= 2 && srcptr[0] == 254 && srcptr[1] == 255)
 	{
 		dstptr = dst = fz_calloc(ctx, (srclen - 2) / 2 + 1, sizeof(short));
-		for (i = 2; i < srclen; i += 2)
-			*dstptr++ = (srcptr[i] << 8) | srcptr[i+1];
+		for (i = 2; i + 1 < srclen; i += 2)
+			*dstptr++ = srcptr[i] << 8 | srcptr[i+1];
 	}
-	/* SumatraPDF: also handle little-endian UTF-16 strings */
 	else if (srclen >= 2 && srcptr[0] == 255 && srcptr[1] == 254)
 	{
 		dstptr = dst = fz_calloc(ctx, (srclen - 2) / 2 + 1, sizeof(short));
-		for (i = 2; i < srclen; i += 2)
-			*dstptr++ = srcptr[i] | (srcptr[i+1] << 8);
+		for (i = 2; i + 1 < srclen; i += 2)
+			*dstptr++ = srcptr[i] | srcptr[i+1] << 8;
 	}
 	else
 	{
@@ -367,7 +363,18 @@ skip:
 			error = pdf_parse_array(&val, xref, file, buf, cap);
 			if (error)
 			{
+				/* cf. http://code.google.com/p/sumatrapdf/issues/detail?id=1643 */
+				fz_error_handle(ctx, error, "ignoring broken array for '%s'", fz_to_name(ctx, key));
 				fz_drop_obj(ctx, key);
+				do
+				{
+					error = pdf_lex(&tok, file, buf, cap, &len);
+					if (!error && tok == PDF_TOK_CLOSE_DICT)
+						goto skip;
+				} while (!error && tok != PDF_TOK_CLOSE_ARRAY && tok != PDF_TOK_EOF && tok != PDF_TOK_OPEN_ARRAY && tok != PDF_TOK_OPEN_DICT);
+				if (!error && tok == PDF_TOK_CLOSE_ARRAY)
+					continue;
+				error = fz_error_make(ctx, "cannot make sense of broken array after all");
 				fz_drop_obj(ctx, dict);
 				return fz_error_note(ctx, error, "cannot parse dict");
 			}

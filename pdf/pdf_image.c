@@ -23,6 +23,7 @@ pdf_mask_color_key(fz_pixmap *pix, int n, int *colorkey)
 				p[k] = 0;
 		p += pix->n;
 	}
+	pix->has_alpha = pix->n > n; /* SumatraPDF: allow optimizing non-alpha pixmaps */
 }
 
 static fz_error
@@ -155,7 +156,14 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 	{
 		usecolorkey = 1;
 		for (i = 0; i < n * 2; i++)
+		{
+			if (!fz_is_int(ctx, fz_array_get(ctx, obj, i)))
+			{
+				fz_warn(ctx, "invalid value in color key mask");
+				usecolorkey = 0;
+			}
 			colorkey[i] = fz_to_int(ctx, fz_array_get(ctx, obj, i));
+		}
 	}
 
 	/* Allocate now, to fail early if we run out of memory */
@@ -191,7 +199,14 @@ pdf_load_image_imp(fz_pixmap **imgp, pdf_xref *xref, fz_obj *rdb, fz_obj *dict, 
 		}
 	}
 
-	samples = fz_calloc(ctx, h, stride);
+	/* SumatraPDF: don't crash on OOM */
+	samples = fz_calloc_no_abort(ctx, h, stride);
+	if (!samples)
+	{
+		fz_close(stm);
+		fz_drop_pixmap(ctx, tile);
+		return fz_error_make(ctx, "out of memory");
+	}
 
 	len = fz_read(stm, samples, h * stride);
 	if (len < 0)
@@ -272,13 +287,12 @@ int
 pdf_is_jpx_image(fz_context *ctx, fz_obj *dict)
 {
 	fz_obj *filter;
-	int i, n;
+	int i;
 
 	filter = fz_dict_gets(ctx, dict, "Filter");
 	if (!strcmp(fz_to_name(ctx, filter), "JPXDecode"))
 		return 1;
-	n = fz_array_len(ctx, filter);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < fz_array_len(ctx, filter); i++)
 		if (!strcmp(fz_to_name(ctx, fz_array_get(ctx, filter, i)), "JPXDecode"))
 			return 1;
 	return 0;
@@ -321,18 +335,6 @@ pdf_load_jpx_image(fz_pixmap **imgp, pdf_xref *xref, fz_obj *dict)
 		fz_drop_colorspace(ctx, colorspace);
 	fz_drop_buffer(ctx, buf);
 
-	/* http://code.google.com/p/sumatrapdf/issues/detail?id=1610 */
-	obj = fz_dict_getsa(ctx, dict, "Decode", "D");
-	/* TODO: also decode images with Indexed colorspace */
-	if (obj && (!colorspace || strcmp(colorspace->name, "Indexed") != 0))
-	{
-		float decode[FZ_MAX_COLORS * 2];
-		int i;
-		for (i = 0; i < img->n * 2; i++)
-			decode[i] = fz_to_real(ctx, fz_array_get(ctx, obj, i));
-		fz_decode_tile(img, decode);
-	}
-
 	obj = fz_dict_getsa(ctx, dict, "SMask", "Mask");
 	if (fz_is_dict(ctx, obj))
 	{
@@ -342,6 +344,19 @@ pdf_load_jpx_image(fz_pixmap **imgp, pdf_xref *xref, fz_obj *dict)
 			fz_drop_pixmap(ctx, img);
 			return fz_error_note(ctx, error, "cannot load image mask/softmask");
 		}
+	}
+
+	obj = fz_dict_getsa(ctx, dict, "Decode", "D");
+	/* http://code.google.com/p/sumatrapdf/issues/detail?id=1610 */
+	if (obj && (!colorspace || strcmp(colorspace->name, "Indexed") != 0))
+	{
+		float decode[FZ_MAX_COLORS * 2];
+		int i;
+
+		for (i = 0; i < img->n * 2; i++)
+			decode[i] = fz_to_real(ctx, fz_array_get(ctx, obj, i));
+
+		fz_decode_tile(img, decode);
 	}
 
 	*imgp = img;
@@ -354,7 +369,7 @@ pdf_load_image(fz_pixmap **pixp, pdf_xref *xref, fz_obj *dict)
 	fz_error error;
 	fz_context *ctx = xref->ctx;
 
-	if ((*pixp = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)fz_drop_pixmap, dict)))
+	if ((*pixp = pdf_find_item(ctx, xref->store, fz_drop_pixmap, dict)))
 	{
 		fz_keep_pixmap(*pixp);
 		return fz_okay;
@@ -364,7 +379,7 @@ pdf_load_image(fz_pixmap **pixp, pdf_xref *xref, fz_obj *dict)
 	if (error)
 		return fz_error_note(ctx, error, "cannot load image (%d 0 R)", fz_to_num(dict));
 
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)fz_keep_pixmap, (pdf_store_drop_fn *)fz_drop_pixmap, dict, *pixp);
+	pdf_store_item(ctx, xref->store, fz_keep_pixmap, fz_drop_pixmap, dict, *pixp);
 
 	return fz_okay;
 }

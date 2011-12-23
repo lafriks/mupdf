@@ -208,9 +208,8 @@ fz_open_dctd(fz_stream *chain, fz_obj *params)
 	fz_dctd *state;
 	fz_obj *obj;
 
-        assert(chain);
-        state = fz_calloc(chain->ctx, 1, sizeof(fz_dctd));
-        state->ctx = chain->ctx;
+	state = fz_malloc(chain->ctx, sizeof(fz_dctd));
+	memset(state, 0, sizeof(fz_dctd));
 	state->chain = chain;
 	state->color_transform = -1; /* unset */
 	state->init = 0;

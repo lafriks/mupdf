@@ -175,8 +175,12 @@ static void showgrep(char *filename)
 		if (xref->table[i].type == 'n' || xref->table[i].type == 'o')
 		{
 			error = pdf_load_object(&obj, xref, i, 0);
+			/* SumatraPDF: skip invalid objects instead of aborting */
 			if (error)
-				die(error);
+			{
+				fz_error_handle(ctx, error, "skipping object (%d 0 R)", i);
+				continue;
+			}
 
 			fz_sort_dict(ctx, obj);
 

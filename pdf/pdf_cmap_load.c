@@ -15,7 +15,7 @@ pdf_load_embedded_cmap(pdf_cmap **cmapp, pdf_xref *xref, fz_obj *stmobj)
 	fz_obj *obj;
 	fz_context *ctx = xref->ctx;
 
-	if ((*cmapp = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)pdf_drop_cmap, stmobj)))
+	if ((*cmapp = pdf_find_item(ctx, xref->store, pdf_drop_cmap, stmobj)))
 	{
 		pdf_keep_cmap(*cmapp);
 		return fz_okay;
@@ -65,7 +65,7 @@ pdf_load_embedded_cmap(pdf_cmap **cmapp, pdf_xref *xref, fz_obj *stmobj)
 		pdf_drop_cmap(ctx, usecmap);
 	}
 
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)pdf_keep_cmap, (pdf_store_drop_fn *)pdf_drop_cmap, stmobj, cmap);
+	pdf_store_item(ctx, xref->store, pdf_keep_cmap, pdf_drop_cmap, stmobj, cmap);
 
 	*cmapp = cmap;
 	return fz_okay;

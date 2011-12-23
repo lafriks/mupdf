@@ -1361,7 +1361,7 @@ pdf_load_function(pdf_function **funcp, pdf_xref *xref, fz_obj *dict)
 	int i;
 	fz_context *ctx = xref->ctx;
 
-	if ((*funcp = pdf_find_item(ctx, xref->store, (pdf_store_drop_fn *)pdf_drop_function, dict)))
+	if ((*funcp = pdf_find_item(ctx, xref->store, pdf_drop_function, dict)))
 	{
 		pdf_keep_function(*funcp);
 		return fz_okay;
@@ -1450,7 +1450,7 @@ pdf_load_function(pdf_function **funcp, pdf_xref *xref, fz_obj *dict)
 		return fz_error_make(ctx, "unknown function type (%d %d R)", fz_to_num(dict), fz_to_gen(dict));
 	}
 
-	pdf_store_item(ctx, xref->store, (pdf_store_keep_fn *)pdf_keep_function, (pdf_store_drop_fn *)pdf_drop_function, dict, func);
+	pdf_store_item(ctx, xref->store, pdf_keep_function, pdf_drop_function, dict, func);
 
 	*funcp = func;
 	return fz_okay;

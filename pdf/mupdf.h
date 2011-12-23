@@ -56,6 +56,8 @@ void pdf_free_windows_fontlist(fz_context *ctx, pdf_windows_fontlist *fl);
 
 typedef struct pdf_xref_entry_s pdf_xref_entry;
 typedef struct pdf_crypt_s pdf_crypt;
+typedef struct pdf_ocg_descriptor_s pdf_ocg_descriptor;
+typedef struct pdf_ocg_entry_s pdf_ocg_entry;
 
 struct pdf_xref_entry_s
 {
@@ -64,6 +66,20 @@ struct pdf_xref_entry_s
 	int stm_ofs;	/* on-disk stream */
 	fz_obj *obj;	/* stored/cached object */
 	int type;	/* 0=unset (f)ree i(n)use (o)bjstm */
+};
+
+struct pdf_ocg_entry_s
+{
+	int num;
+	int gen;
+	int state;
+};
+
+struct pdf_ocg_descriptor_s
+{
+	int len;
+	pdf_ocg_entry *ocgs;
+	fz_obj *intent;
 };
 
 struct pdf_xref_s
@@ -75,6 +91,7 @@ struct pdf_xref_s
 	int file_size;
 	pdf_crypt *crypt;
 	fz_obj *trailer;
+	pdf_ocg_descriptor *ocg;
 
 	int len;
 	pdf_xref_entry *table;
@@ -161,12 +178,9 @@ pdf_store *pdf_new_store(fz_context *ctx);
 void pdf_free_store(fz_context *ctx, pdf_store *store);
 void pdf_debug_store(fz_context *ctx, pdf_store *store);
 
-typedef void *(pdf_store_keep_fn)(void *);
-typedef void (pdf_store_drop_fn)(fz_context *, void *);
-
-void pdf_store_item(fz_context *ctx, pdf_store *store, pdf_store_keep_fn *keepfn, pdf_store_drop_fn *dropfn, fz_obj *key, void *val);
-void *pdf_find_item(fz_context *ctx, pdf_store *store, pdf_store_drop_fn *dropfn, fz_obj *key);
-void pdf_remove_item(fz_context *ctx, pdf_store *store, pdf_store_drop_fn *dropfn, fz_obj *key);
+void pdf_store_item(fz_context *ctx, pdf_store *store, void *keepfn, void *dropfn, fz_obj *key, void *val);
+void *pdf_find_item(fz_context *ctx, pdf_store *store, void *dropfn, fz_obj *key);
+void pdf_remove_item(fz_context *ctx, pdf_store *store, void *dropfn, fz_obj *key);
 void pdf_age_store(fz_context *ctx, pdf_store *store, int maxage);
 
 /*
@@ -413,13 +427,13 @@ unsigned char *pdf_find_builtin_font(char *name, unsigned int *len);
 unsigned char *pdf_find_substitute_font(int mono, int serif, int bold, int italic, unsigned int *len);
 unsigned char *pdf_find_substitute_cjk_font(int ros, int serif, unsigned int *len);
 
-fz_error pdf_load_type3_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
-fz_error pdf_load_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
-
 #ifdef _WIN32
 fz_error pdf_load_similar_cjk_font(pdf_xref *xref, pdf_font_desc *font, int ros, int serif);
 fz_error pdf_load_windows_font(pdf_xref *xref, pdf_font_desc *font, char *fontname);
 #endif
+
+fz_error pdf_load_type3_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
+fz_error pdf_load_font(pdf_font_desc **fontp, pdf_xref *xref, fz_obj *rdb, fz_obj *obj);
 
 pdf_font_desc *pdf_new_font_desc(fz_context *ctx);
 pdf_font_desc *pdf_keep_font(pdf_font_desc *fontdesc);
@@ -437,7 +451,6 @@ void pdf_ft_free_vsubst(fz_context *ctx, pdf_font_desc *fontdesc);
 
 typedef struct pdf_link_s pdf_link;
 typedef struct pdf_annot_s pdf_annot;
-typedef struct pdf_outline_s pdf_outline;
 
 typedef enum pdf_link_kind_e
 {
@@ -465,22 +478,11 @@ struct pdf_annot_s
 	pdf_annot *next;
 };
 
-struct pdf_outline_s
-{
-	char *title;
-	pdf_link *link;
-	int count;
-	pdf_outline *child;
-	pdf_outline *next;
-};
-
 fz_obj *pdf_lookup_dest(pdf_xref *xref, fz_obj *needle);
 fz_obj *pdf_lookup_name(pdf_xref *xref, char *which, fz_obj *needle);
 fz_obj *pdf_load_name_tree(pdf_xref *xref, char *which);
 
-pdf_outline *pdf_load_outline(pdf_xref *xref);
-void pdf_debug_outline(fz_context *ctx, pdf_outline *outline, int level);
-void pdf_free_outline(fz_context *ctx, pdf_outline *outline);
+fz_outline *pdf_load_outline(pdf_xref *xref);
 
 pdf_link *pdf_load_link(pdf_xref *xref, fz_obj *dict);
 void pdf_load_links(pdf_link **, pdf_xref *, fz_obj *annots);
@@ -517,7 +519,7 @@ void pdf_free_page(fz_context *ctx, pdf_page *page);
  * Content stream parsing
  */
 
-fz_error pdf_run_page_with_usage(pdf_xref *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *target);
+fz_error pdf_run_page_with_usage(pdf_xref *xref, pdf_page *page, fz_device *dev, fz_matrix ctm, char *event);
 fz_error pdf_run_page(pdf_xref *xref, pdf_page *page, fz_device *dev, fz_matrix ctm);
 fz_error pdf_run_glyph(pdf_xref *xref, fz_obj *resources, fz_buffer *contents, fz_device *dev, fz_matrix ctm);
 
