@@ -72,6 +72,7 @@ pdf_new_crypt(fz_context *ctx, pdf_crypt **cryptp, fz_obj *dict, fz_obj *id)
 	}
 
 	crypt->v = 0;
+	crypt->ctx = ctx;
 	obj = fz_dict_gets(ctx, dict, "V");
 	if (fz_is_int(ctx, obj))
 		crypt->v = fz_to_int(ctx, obj);
